@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>キーワードボリューム検索ツール</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: auto; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="text"], select { width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; }
+        button { padding: 10px 15px; cursor: pointer; }
+        #chart { margin-top: 20px; border: 1px solid #ccc; min-height: 300px; }
+        .platform-options label { display: inline-block; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>キーワードボリューム検索ツール</h1>
+
+        <div class="input-group">
+            <label for="keywords">キーワード (カンマ区切りで複数可):</label>
+            <input type="text" id="keywords" name="keywords" placeholder="例: ファッション, 旅行">
+        </div>
+
+        <div class="input-group platform-options">
+            <label>プラットフォーム:</label>
+            <label><input type="checkbox" name="platform" value="Google" checked> Google</label>
+            <label><input type="checkbox" name="platform" value="Instagram"> Instagram</label>
+            <label><input type="checkbox" name="platform" value="TikTok"> TikTok</label>
+        </div>
+
+        <div class="input-group">
+            <label for="period">期間:</label>
+            <select id="period" name="period">
+                <option value="12">過去12ヶ月</option>
+                <option value="6">過去6ヶ月</option>
+                <!-- カスタム期間は後で実装 -->
+            </select>
+        </div>
+
+        <button id="search-button">検索</button>
+
+        <div id="chart">
+            <!-- グラフはここに表示されます -->
+        </div>
+        <div id="status"></div> <!-- 処理状況表示用 -->
+    </div>
+
+    <py-config>
+        packages = ["plotly"] # グラフ描画用
+    </py-config>
+
+    <py-script>
+        # ここにPythonコードを記述
+        # (API連携、データ処理、グラフ描画など)
+        # まずはUI要素へのアクセスとイベントハンドラ設定
+        from pyscript import document, display
+        from pyodide.http import pyfetch # HTTPリクエスト用
+        import asyncio
+        import json
+        import plotly.graph_objects as go # グラフ描画用
+        from datetime import datetime # 年月データの処理用
+
+        keywords_input = document.getElementById("keywords")
+        platform_checkboxes = document.querySelectorAll("input[name=\'platform\']")
+        period_select = document.getElementById("period")
+        search_button = document.getElementById("search-button")
+        chart_div = document.getElementById("chart")
+        status_div = document.getElementById("status")
+
+        API_KEY = "ebf17c9dfc6a862ee5944ffc434fc959e6a38f35" # これはデモ用。実際には安全な方法で管理
+
+        # APIエンドポイントと基本リクエストボディ
+        API_CONFIG = {
+            'Google': {
+                'url': 'https://api.keywordtool.io/v2/search/volume/google',
+                'base_body': {
+                    "apikey": API_KEY,
+                    "metrics_location": [2392], # 日本
+                    "metrics_language": ["ja"],
+                    "metrics_network": "googlesearchnetwork",
+                    "metrics_currency": "JPY",
+                    "output": "json"
+                }
+            },
+            'Instagram': {
+                'url': 'https://api.keywordtool.io/v2/search/volume/instagram',
+                'base_body': {
+                    "apikey": API_KEY,
+                    "country": "JP",
+                    "metrics_currency": "JPY",
+                    "complete": False,
+                    "output": "json"
+                }
+            },
+            'TikTok': {
+                'url': 'https://api.keywordtool.io/v2/search/volume/tiktok',
+                'base_body': {
+                    "apikey": API_KEY,
+                    "country": "JP",
+                    "metrics_currency": "JPY",
+                    "complete": False,
+                    "output": "json"
+                }
+            }
+        }
+
+        async def fetch_data(keywords, platform):
+            """指定されたプラットフォームのキーワードデータをAPIから取得する"""
+            if platform not in API_CONFIG:
+                print(f"未対応のプラットフォーム: {platform}")
+                return None
+
+            config = API_CONFIG[platform]
+            url = config['url']
+            body = config['base_body'].copy()
+            body['keyword'] = keywords
+
+            try:
+                response = await pyfetch(
+                    url=url,
+                    method="POST",
+                    headers={"Content-Type": "application/json"},
+                    body=json.dumps(body)
+                )
+                if not response.ok:
+                    error_text = await response.text()
+                    print(f"APIエラー ({platform}): {response.status} {error_text}")
+                    status_div.innerText += f"\n{platform}のデータ取得エラー: {response.status}"
+                    return None
+
+                data = await response.json()
+                # print(f"{platform} API Response:", data) # デバッグ用
+                return data
+            except Exception as e:
+                print(f"Fetchエラー ({platform}): {e}")
+                status_div.innerText += f"\n{platform}のデータ取得中にエラーが発生しました: {e}"
+                return None
+
+        def process_api_data(api_response, keywords):
+            """APIレスポンスをグラフ表示に適した形式に処理する"""
+            processed_data = {}
+            if not api_response or 'results' not in api_response:
+                return processed_data
+
+            results = api_response['results']
+            for keyword in keywords:
+                if keyword in results:
+                    kw_data = results[keyword]
+                    monthly_trends = {}
+                    for i in range(1, 13):
+                        month_key = f'm{i}'
+                        year_key = f'm{i}_year'
+                        month_num_key = f'm{i}_month'
+                        if month_key in kw_data and year_key in kw_data and month_num_key in kw_data:
+                            year = kw_data[year_key]
+                            month = kw_data[month_num_key]
+                            volume = kw_data[month_key]
+                            if year and month and volume is not None:
+                                # datetimeオブジェクトを作成してソート可能にする
+                                date_key = datetime(year, month, 1)
+                                monthly_trends[date_key] = volume
+                    # 日付でソート
+                    sorted_trends = dict(sorted(monthly_trends.items()))
+                    processed_data[keyword] = {
+                        'volume': kw_data.get('volume'),
+                        'cpc': kw_data.get('cpc'),
+                        'trends': sorted_trends
+                    }
+            return processed_data
+
+        async def search_trends(event):
+            status_div.innerText = "検索中..."
+            chart_div.innerHTML = "" # 前回のグラフをクリア
+
+            keywords = [kw.strip() for kw in keywords_input.value.split(',') if kw.strip()]
+            selected_platforms = [cb.value for cb in platform_checkboxes if cb.checked]
+            period_months = int(period_select.value)
+
+            if not keywords or not selected_platforms:
+                status_div.innerText = "キーワードとプラットフォームを選択してください。"
+                return
+
+            all_results = {}
+            tasks = []
+            for platform in selected_platforms:
+                status_div.innerText += f"\n{platform}のデータを取得中..."
+                # fetch_dataを非同期に呼び出すタスクを作成
+                tasks.append(asyncio.create_task(fetch_data(keywords, platform)))
+
+            # すべてのAPI呼び出しを並行して実行し、結果を待つ
+            api_responses = await asyncio.gather(*tasks)
+
+            status_div.innerText = "データ処理中..."
+            for platform, response in zip(selected_platforms, api_responses):
+                if response:
+                    processed = process_api_data(response, keywords)
+                    if processed:
+                        all_results[platform] = processed
+                    else:
+                         status_div.innerText += f"\n{platform}: データが見つからないか、処理に失敗しました。"
+                else:
+                    # fetch_data内でエラーメッセージ表示済み
+                    pass
+
+            if not all_results:
+                status_div.innerText += "\n有効なデータが取得できませんでした。"
+                return
+
+            # ここでグラフ描画処理を呼び出す (次のステップで実装)
+            # plot_trends(all_results, period_months)
+            status_div.innerText = "検索完了 (グラフ表示は未実装)"
+            print("Processed Data:", all_results) # デバッグ用
+
+        search_button.addEventListener("click", search_trends)
+
+        def plot_trends(data, period_months):
+            """処理されたデータを使用してトレンドグラフをプロットする"""
+            fig = go.Figure()
+            platform_colors = {
+                'Google': 'blue',
+                'Instagram': 'purple', # 要件定義に合わせて修正 (元は'magenta')
+                'TikTok': 'black'
+            }
+
+            if not data:
+                chart_div.innerHTML = "<p>表示するデータがありません。</p>"
+                return
+
+            # 期間フィルタリングのための基準日（最新の日付）を見つける
+            latest_date = None
+            for platform_data in data.values():
+                for kw_data in platform_data.values():
+                    if kw_data['trends']:
+                        current_latest = max(kw_data['trends'].keys())
+                        if latest_date is None or current_latest > latest_date:
+                            latest_date = current_latest
+
+            if latest_date is None:
+                 chart_div.innerHTML = "<p>有効な日付データが見つかりませんでした。</p>"
+                 return
+
+            # 開始日を計算 (period_months前の月の1日)
+            start_year = latest_date.year
+            start_month = latest_date.month - period_months + 1
+            while start_month <= 0:
+                start_month += 12
+                start_year -= 1
+            start_date_cutoff = datetime(start_year, start_month, 1)
+
+            has_data_to_plot = False
+            for platform, platform_data in data.items():
+                color = platform_colors.get(platform, 'grey') # 未定義プラットフォームは灰色
+                for keyword, kw_data in platform_data.items():
+                    trends = kw_data.get('trends', {})
+                    # 期間でフィルタリングし、日付を文字列に変換
+                    filtered_trends = {dt.strftime('%Y/%m'): vol for dt, vol in trends.items() if dt >= start_date_cutoff}
+
+                    if filtered_trends:
+                        has_data_to_plot = True
+                        dates = list(filtered_trends.keys())
+                        volumes = list(filtered_trends.values())
+                        fig.add_trace(go.Scatter(
+                            x=dates,
+                            y=volumes,
+                            mode='lines+markers',
+                            name=f'{keyword} ({platform})',
+                            line=dict(color=color)
+                        ))
+
+            if not has_data_to_plot:
+                chart_div.innerHTML = f"<p>指定された期間 ({period_months}ヶ月) に表示できるデータがありません。</p>"
+                return
+
+            fig.update_layout(
+                title='キーワード検索ボリューム推移',
+                xaxis_title='年月',
+                yaxis_title='検索ボリューム',
+                hovermode='x unified' # ホバー時の挙動
+            )
+            # display関数でグラフを描画
+            display(fig, target="chart", append=False)
+            status_div.innerText += "\nグラフ描画完了。"
+
+        # search_trends内の呼び出し部分を修正
+        async def search_trends(event):
+            status_div.innerText = "検索中..."
+            chart_div.innerHTML = "" # 前回のグラフをクリア
+
+            keywords = [kw.strip() for kw in keywords_input.value.split(",") if kw.strip()]
+            selected_platforms = [cb.value for cb in platform_checkboxes if cb.checked]
+            period_months = int(period_select.value)
+
+            if not keywords or not selected_platforms:
+                status_div.innerText = "キーワードとプラットフォームを選択してください。"
+                return
+
+            all_results = {}
+            tasks = []
+            status_div.innerText = "データ取得開始..."
+            for platform in selected_platforms:
+                status_div.innerText += f"\n{platform}のデータを取得中..."
+                tasks.append(asyncio.create_task(fetch_data(keywords, platform)))
+
+            api_responses = await asyncio.gather(*tasks)
+
+            status_div.innerText = "データ処理中..."
+            for platform, response in zip(selected_platforms, api_responses):
+                if response:
+                    processed = process_api_data(response, keywords)
+                    if processed:
+                        all_results[platform] = processed
+                    else:
+                         status_div.innerText += f"\n{platform}: データが見つからないか、処理に失敗しました。"
+                # else: fetch_data内でエラーメッセージ表示済み
+
+            if not all_results:
+                status_div.innerText += "\n有効なデータが取得できませんでした。グラフは表示されません。"
+                return
+
+            status_div.innerText += "\nグラフ描画中..."
+            # グラフ描画処理を呼び出す
+            plot_trends(all_results, period_months)
+            # print("Processed Data:", all_results) # デバッグ用
+
+    </py-script>
+
+</body>
+</html>
+
