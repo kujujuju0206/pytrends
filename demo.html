@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>キーワードボリューム検索ツール (デモ版)</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: auto; 
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .input-group { 
+            margin-bottom: 20px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: bold;
+        }
+        input[type="text"], select { 
+            width: 100%; 
+            padding: 10px; 
+            box-sizing: border-box; 
+            margin-bottom: 10px; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button { 
+            padding: 12px 20px; 
+            cursor: pointer; 
+            background-color: #4285f4; 
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        #chart { 
+            margin-top: 30px; 
+            border: 1px solid #eee; 
+            min-height: 400px; 
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .platform-options { 
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .platform-options label { 
+            display: inline-flex; 
+            align-items: center;
+            font-weight: normal;
+            margin-right: 15px; 
+            cursor: pointer;
+        }
+        .platform-options input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            min-height: 20px;
+            white-space: pre-line;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4285f4;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 3px;
+        }
+        .demo-notice {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>キーワードボリューム検索ツール (デモ版)</h1>
+            <p>Google、Instagram、TikTokの検索ボリューム推移を比較</p>
+        </div>
+
+        <div class="demo-notice">
+            <strong>デモ版:</strong> このバージョンではAPIを使用せず、ダミーデータを生成して表示します。
+        </div>
+
+        <div class="input-group">
+            <label for="keywords">キーワード (カンマ区切りで複数可):</label>
+            <input type="text" id="keywords" name="keywords" placeholder="例: ファッション, 旅行, スポーツ" value="ファッション, 旅行">
+        </div>
+
+        <div class="input-group">
+            <label>プラットフォーム:</label>
+            <div class="platform-options">
+                <label><input type="checkbox" name="platform" value="Google" checked> Google</label>
+                <label><input type="checkbox" name="platform" value="Instagram" checked> Instagram</label>
+                <label><input type="checkbox" name="platform" value="TikTok" checked> TikTok</label>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label for="period">期間:</label>
+            <select id="period" name="period">
+                <option value="12">過去12ヶ月</option>
+                <option value="6">過去6ヶ月</option>
+                <option value="3">過去3ヶ月</option>
+            </select>
+        </div>
+
+        <button id="search-button">検索</button>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>データを生成中...</div>
+        </div>
+
+        <div id="chart">
+            <!-- グラフはここに表示されます -->
+            <p>キーワードを入力して検索ボタンをクリックすると、検索ボリュームのグラフが表示されます。</p>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: blue;"></div>
+                <div>Google</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: purple;"></div>
+                <div>Instagram</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: black;"></div>
+                <div>TikTok</div>
+            </div>
+        </div>
+
+        <div id="status"></div> <!-- 処理状況表示用 -->
+    </div>
+
+    <py-config>
+        packages = ["plotly"]
+    </py-config>
+
+    <py-script>
+        from pyscript import document, display
+        import asyncio
+        import json
+        import plotly.graph_objects as go
+        from datetime import datetime, timedelta
+        import traceback
+        import random
+
+        # UI要素の取得
+        keywords_input = document.getElementById("keywords")
+        platform_checkboxes = document.querySelectorAll("input[name='platform']")
+        period_select = document.getElementById("period")
+        search_button = document.getElementById("search-button")
+        chart_div = document.getElementById("chart")
+        status_div = document.getElementById("status")
+        loading_div = document.getElementById("loading")
+
+        # プラットフォームごとの色設定
+        PLATFORM_COLORS = {
+            'Google': 'blue',
+            'Instagram': 'purple',
+            'TikTok': 'black'
+        }
+
+        # プラットフォームごとの基本ボリューム設定（デモ用）
+        PLATFORM_BASE_VOLUMES = {
+            'Google': {
+                'ファッション': 12000,
+                '旅行': 8500,
+                'スポーツ': 7200,
+                'グルメ': 9800,
+                'ゲーム': 15000,
+                'エンタメ': 11000,
+                'ビジネス': 6500,
+                'テクノロジー': 8800,
+                '健康': 7500,
+                '美容': 10200
+            },
+            'Instagram': {
+                'ファッション': 18000,
+                '旅行': 14500,
+                'スポーツ': 9200,
+                'グルメ': 16800,
+                'ゲーム': 8000,
+                'エンタメ': 17000,
+                'ビジネス': 5500,
+                'テクノロジー': 7800,
+                '健康': 12500,
+                '美容': 19200
+            },
+            'TikTok': {
+                'ファッション': 22000,
+                '旅行': 16500,
+                'スポーツ': 12200,
+                'グルメ': 18800,
+                'ゲーム': 25000,
+                'エンタメ': 23000,
+                'ビジネス': 4500,
+                'テクノロジー': 9800,
+                '健康': 14500,
+                '美容': 21200
+            }
+        }
+
+        def show_loading(show=True):
+            """ローディングインジケータの表示/非表示を切り替える"""
+            if show:
+                loading_div.classList.add("active")
+            else:
+                loading_div.classList.remove("active")
+
+        def update_status(message, append=False):
+            """ステータスメッセージを更新する"""
+            if append:
+                status_div.innerText += f"\n{message}"
+            else:
+                status_div.innerText = message
+
+        def generate_demo_data(keywords, platforms, months=12):
+            """デモ用のダミーデータを生成する関数"""
+            today = datetime.now()
+            demo_data = {}
+            
+            # 各プラットフォームのデータを生成
+            for platform in platforms:
+                demo_data[platform] = {}
+                
+                # 各キーワードのデータを生成
+                for keyword in keywords:
+                    # 基本ボリュームを取得（存在しない場合はランダムに生成）
+                    if keyword in PLATFORM_BASE_VOLUMES.get(platform, {}):
+                        base_volume = PLATFORM_BASE_VOLUMES[platform][keyword]
+                    else:
+                        base_volume = random.randint(5000, 20000)
+                    
+                    # CPCを生成
+                    cpc = round(random.uniform(0.5, 3.0), 2)
+                    
+                    # 月別トレンドデータを格納する辞書
+                    monthly_trends = {}
+                    
+                    # 過去months分のデータを生成
+                    for i in range(months):
+                        # 日付を計算（現在から過去に遡る）
+                        date = today - timedelta(days=30 * i)
+                        date = datetime(date.year, date.month, 1)
+                        
+                        # 季節変動要素（1月と7月にピーク）
+                        month_factor = 1 + 0.2 * abs(((date.month - 1) % 12) / 6 - 1)
+                        
+                        # トレンド要素（時間経過で少しずつ増加）
+                        trend_factor = 1 + 0.05 * (i / months)
+                        
+                        # ランダム変動（±10%）
+                        random_factor = 0.9 + 0.2 * random.random()
+                        
+                        # プラットフォーム固有の変動（TikTokは成長率が高い、など）
+                        platform_factor = 1.0
+                        if platform == 'TikTok':
+                            platform_factor = 1.0 + (0.1 * (months - i) / months)  # 新しいデータほど増加率が高い
+                        elif platform == 'Instagram':
+                            platform_factor = 1.0 + (0.05 * (months - i) / months)
+                        
+                        # 最終的なボリュームを計算
+                        volume = int(base_volume * month_factor / trend_factor * random_factor * platform_factor)
+                        
+                        # 結果を格納
+                        monthly_trends[date] = volume
+                    
+                    # キーワードのデータを格納
+                    demo_data[platform][keyword] = {
+                        'volume': sum(monthly_trends.values()) // len(monthly_trends),  # 平均値
+                        'cpc': cpc,
+                        'trends': monthly_trends
+                    }
+            
+            return demo_data
+
+        def plot_trends(data, period_months):
+            """処理されたデータを使用してトレンドグラフをプロットする"""
+            # Plotlyのグラフオブジェクトを作成
+            fig = go.Figure()
+            
+            if not data:
+                chart_div.innerHTML = '<p>表示するデータがありません。</p>'
+                return
+
+            # 現在の日付から過去period_months分の期間を計算
+            today = datetime.now()
+            start_year = today.year
+            start_month = today.month - period_months
+            
+            # 月が負の値になった場合は前年に調整
+            while start_month <= 0:
+                start_month += 12
+                start_year -= 1
+                
+            start_date_cutoff = datetime(start_year, start_month, 1)
+            
+            # データをプロット
+            has_data_to_plot = False
+            for platform, platform_data in data.items():
+                color = PLATFORM_COLORS.get(platform, 'grey')  # 未定義プラットフォームは灰色
+                
+                for keyword, kw_data in platform_data.items():
+                    trends = kw_data.get('trends', {})
+                    
+                    # 期間でフィルタリングし、日付を文字列に変換
+                    filtered_trends = {dt.strftime('%Y/%m'): vol for dt, vol in trends.items() if dt >= start_date_cutoff}
+                    
+                    if filtered_trends:
+                        has_data_to_plot = True
+                        dates = list(filtered_trends.keys())
+                        volumes = list(filtered_trends.values())
+                        
+                        # 折れ線グラフを追加
+                        fig.add_trace(go.Scatter(
+                            x=dates,
+                            y=volumes,
+                            mode='lines+markers',
+                            name=f'{keyword} ({platform})',
+                            line=dict(color=color, width=2),
+                            marker=dict(size=8)
+                        ))
+
+            if not has_data_to_plot:
+                chart_div.innerHTML = f'<p>指定された期間 ({period_months}ヶ月) に表示できるデータがありません。</p>'
+                return
+
+            # グラフのレイアウト設定
+            fig.update_layout(
+                title={
+                    'text': 'キーワード検索ボリューム推移 (デモデータ)',
+                    'y': 0.95,
+                    'x': 0.5,
+                    'xanchor': 'center',
+                    'yanchor': 'top'
+                },
+                xaxis_title='年月',
+                yaxis_title='検索ボリューム',
+                hovermode='x unified',  # ホバー時の挙動
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.2,
+                    xanchor="center",
+                    x=0.5
+                ),
+                margin=dict(l=50, r=50, t=80, b=100),
+                plot_bgcolor='rgba(240,240,240,0.2)',
+                paper_bgcolor='rgba(0,0,0,0)'
+            )
+            
+            # グリッド線の設定
+            fig.update_xaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200,200,200,0.2)'
+            )
+            fig.update_yaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200,200,200,0.2)'
+            )
+            
+            # display関数でグラフを描画
+            display(fig, target="chart", append=False)
+            update_status("グラフ描画完了", append=True)
+
+        async def search_trends(event):
+            """検索ボタンクリック時の処理"""
+            # 入力値の取得と検証
+            keywords = [kw.strip() for kw in keywords_input.value.split(",") if kw.strip()]
+            selected_platforms = [cb.value for cb in platform_checkboxes if cb.checked]
+            period_months = int(period_select.value)
+            
+            # 入力チェック
+            if not keywords:
+                update_status("キーワードを入力してください。")
+                return
+                
+            if not selected_platforms:
+                update_status("少なくとも1つのプラットフォームを選択してください。")
+                return
+            
+            # UI状態の更新
+            chart_div.innerHTML = ""  # 前回のグラフをクリア
+            update_status("デモデータを生成中...")
+            show_loading(True)
+            search_button.disabled = True
+            
+            try:
+                # 少し待機してローディング表示を見せる（デモ用）
+                await asyncio.sleep(1.5)
+                
+                # デモデータを生成
+                demo_data = generate_demo_data(keywords, selected_platforms, 12)
+                
+                # グラフ描画
+                update_status("グラフを描画中...", append=True)
+                plot_trends(demo_data, period_months)
+                
+            except Exception as e:
+                error_details = traceback.format_exc()
+                update_status(f"エラーが発生しました: {str(e)}", append=True)
+                print("Error:", error_details)
+                
+            finally:
+                # UI状態を元に戻す
+                show_loading(False)
+                search_button.disabled = False
+
+        # 検索ボタンにイベントリスナーを設定
+        search_button.addEventListener("click", search_trends)
+        
+        # 初期メッセージ
+        update_status("キーワードを入力して検索ボタンをクリックしてください。")
+        
+        # ページ読み込み時に自動的にデモデータを表示
+        async def auto_load_demo():
+            await asyncio.sleep(0.5)  # 少し待機してUIが完全に読み込まれるのを待つ
+            await search_trends(None)
+            
+        asyncio.ensure_future(auto_load_demo())
+    </py-script>
+
+</body>
+</html>
