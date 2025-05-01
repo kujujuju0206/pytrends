@@ -7,30 +7,142 @@
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .container { max-width: 800px; margin: auto; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input[type="text"], select { width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; }
-        button { padding: 10px 15px; cursor: pointer; }
-        #chart { margin-top: 20px; border: 1px solid #ccc; min-height: 300px; }
-        .platform-options label { display: inline-block; margin-right: 10px; }
+        body { 
+            font-family: sans-serif; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: auto; 
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .input-group { 
+            margin-bottom: 20px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: bold;
+        }
+        input[type="text"], select { 
+            width: 100%; 
+            padding: 10px; 
+            box-sizing: border-box; 
+            margin-bottom: 10px; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button { 
+            padding: 12px 20px; 
+            cursor: pointer; 
+            background-color: #4285f4; 
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        #chart { 
+            margin-top: 30px; 
+            border: 1px solid #eee; 
+            min-height: 400px; 
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .platform-options { 
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .platform-options label { 
+            display: inline-flex; 
+            align-items: center;
+            font-weight: normal;
+            margin-right: 15px; 
+            cursor: pointer;
+        }
+        .platform-options input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            min-height: 20px;
+            white-space: pre-line;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4285f4;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>キーワードボリューム検索ツール</h1>
+        <div class="header">
+            <h1>キーワードボリューム検索ツール</h1>
+            <p>Google、Instagram、TikTokの検索ボリューム推移を比較</p>
+        </div>
 
         <div class="input-group">
             <label for="keywords">キーワード (カンマ区切りで複数可):</label>
-            <input type="text" id="keywords" name="keywords" placeholder="例: ファッション, 旅行">
+            <input type="text" id="keywords" name="keywords" placeholder="例: ファッション, 旅行, スポーツ">
         </div>
 
-        <div class="input-group platform-options">
+        <div class="input-group">
             <label>プラットフォーム:</label>
-            <label><input type="checkbox" name="platform" value="Google" checked> Google</label>
-            <label><input type="checkbox" name="platform" value="Instagram"> Instagram</label>
-            <label><input type="checkbox" name="platform" value="TikTok"> TikTok</label>
+            <div class="platform-options">
+                <label><input type="checkbox" name="platform" value="Google" checked> Google</label>
+                <label><input type="checkbox" name="platform" value="Instagram"> Instagram</label>
+                <label><input type="checkbox" name="platform" value="TikTok"> TikTok</label>
+            </div>
         </div>
 
         <div class="input-group">
@@ -38,49 +150,72 @@
             <select id="period" name="period">
                 <option value="12">過去12ヶ月</option>
                 <option value="6">過去6ヶ月</option>
-                <!-- カスタム期間は後で実装 -->
+                <option value="3">過去3ヶ月</option>
             </select>
         </div>
 
         <button id="search-button">検索</button>
 
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>データを取得中...</div>
+        </div>
+
         <div id="chart">
             <!-- グラフはここに表示されます -->
+            <p>キーワードを入力して検索ボタンをクリックすると、検索ボリュームのグラフが表示されます。</p>
         </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: blue;"></div>
+                <div>Google</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: purple;"></div>
+                <div>Instagram</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: black;"></div>
+                <div>TikTok</div>
+            </div>
+        </div>
+
         <div id="status"></div> <!-- 処理状況表示用 -->
     </div>
 
     <py-config>
-        packages = ["plotly"] # グラフ描画用
+        packages = ["plotly"]
     </py-config>
 
     <py-script>
-        # ここにPythonコードを記述
-        # (API連携、データ処理、グラフ描画など)
-        # まずはUI要素へのアクセスとイベントハンドラ設定
         from pyscript import document, display
-        from pyodide.http import pyfetch # HTTPリクエスト用
+        from pyodide.http import pyfetch
         import asyncio
         import json
-        import plotly.graph_objects as go # グラフ描画用
-        from datetime import datetime # 年月データの処理用
+        import plotly.graph_objects as go
+        from datetime import datetime, timedelta
+        import traceback
 
+        # UI要素の取得
         keywords_input = document.getElementById("keywords")
-        platform_checkboxes = document.querySelectorAll("input[name=\'platform\']")
+        platform_checkboxes = document.querySelectorAll("input[name='platform']")
         period_select = document.getElementById("period")
         search_button = document.getElementById("search-button")
         chart_div = document.getElementById("chart")
         status_div = document.getElementById("status")
+        loading_div = document.getElementById("loading")
 
-        API_KEY = "ebf17c9dfc6a862ee5944ffc434fc959e6a38f35" # これはデモ用。実際には安全な方法で管理
+        # APIキー (実際の運用では環境変数などから安全に取得する方法を検討)
+        API_KEY = "ebf17c9dfc6a862ee5944ffc434fc959e6a38f35"
 
-        # APIエンドポイントと基本リクエストボディ
+        # APIエンドポイントと基本リクエストボディの設定
         API_CONFIG = {
             'Google': {
                 'url': 'https://api.keywordtool.io/v2/search/volume/google',
                 'base_body': {
                     "apikey": API_KEY,
-                    "metrics_location": [2392], # 日本
+                    "metrics_location": [2392],  # 日本
                     "metrics_language": ["ja"],
                     "metrics_network": "googlesearchnetwork",
                     "metrics_currency": "JPY",
@@ -109,10 +244,31 @@
             }
         }
 
+        # プラットフォームごとの色設定
+        PLATFORM_COLORS = {
+            'Google': 'blue',
+            'Instagram': 'purple',
+            'TikTok': 'black'
+        }
+
+        def show_loading(show=True):
+            """ローディングインジケータの表示/非表示を切り替える"""
+            if show:
+                loading_div.classList.add("active")
+            else:
+                loading_div.classList.remove("active")
+
+        def update_status(message, append=False):
+            """ステータスメッセージを更新する"""
+            if append:
+                status_div.innerText += f"\n{message}"
+            else:
+                status_div.innerText = message
+
         async def fetch_data(keywords, platform):
             """指定されたプラットフォームのキーワードデータをAPIから取得する"""
             if platform not in API_CONFIG:
-                print(f"未対応のプラットフォーム: {platform}")
+                update_status(f"未対応のプラットフォーム: {platform}", append=True)
                 return None
 
             config = API_CONFIG[platform]
@@ -121,112 +277,80 @@
             body['keyword'] = keywords
 
             try:
+                update_status(f"{platform}のデータをリクエスト中...", append=True)
+                
+                # APIリクエストの送信
                 response = await pyfetch(
                     url=url,
                     method="POST",
                     headers={"Content-Type": "application/json"},
                     body=json.dumps(body)
                 )
+                
                 if not response.ok:
                     error_text = await response.text()
-                    print(f"APIエラー ({platform}): {response.status} {error_text}")
-                    status_div.innerText += f"\n{platform}のデータ取得エラー: {response.status}"
+                    update_status(f"{platform}のデータ取得エラー: {response.status} - {error_text}", append=True)
                     return None
 
                 data = await response.json()
-                # print(f"{platform} API Response:", data) # デバッグ用
+                update_status(f"{platform}のデータ取得成功", append=True)
                 return data
+                
             except Exception as e:
-                print(f"Fetchエラー ({platform}): {e}")
-                status_div.innerText += f"\n{platform}のデータ取得中にエラーが発生しました: {e}"
+                error_details = traceback.format_exc()
+                update_status(f"{platform}のデータ取得中にエラーが発生しました: {str(e)}", append=True)
+                print(f"Fetch Error ({platform}):", error_details)
                 return None
 
         def process_api_data(api_response, keywords):
             """APIレスポンスをグラフ表示に適した形式に処理する"""
             processed_data = {}
+            
+            # APIレスポンスの検証
             if not api_response or 'results' not in api_response:
                 return processed_data
 
             results = api_response['results']
+            
+            # 各キーワードのデータを処理
             for keyword in keywords:
                 if keyword in results:
                     kw_data = results[keyword]
                     monthly_trends = {}
+                    
+                    # 月別データの抽出
                     for i in range(1, 13):
                         month_key = f'm{i}'
                         year_key = f'm{i}_year'
                         month_num_key = f'm{i}_month'
-                        if month_key in kw_data and year_key in kw_data and month_num_key in kw_data:
+                        
+                        if all(k in kw_data for k in [month_key, year_key, month_num_key]):
                             year = kw_data[year_key]
                             month = kw_data[month_num_key]
                             volume = kw_data[month_key]
+                            
                             if year and month and volume is not None:
                                 # datetimeオブジェクトを作成してソート可能にする
                                 date_key = datetime(year, month, 1)
                                 monthly_trends[date_key] = volume
+                    
                     # 日付でソート
                     sorted_trends = dict(sorted(monthly_trends.items()))
+                    
+                    # 結果を格納
                     processed_data[keyword] = {
                         'volume': kw_data.get('volume'),
                         'cpc': kw_data.get('cpc'),
                         'trends': sorted_trends
                     }
+            
             return processed_data
-
-        async def search_trends(event):
-            status_div.innerText = "検索中..."
-            chart_div.innerHTML = "" # 前回のグラフをクリア
-
-            keywords = [kw.strip() for kw in keywords_input.value.split(',') if kw.strip()]
-            selected_platforms = [cb.value for cb in platform_checkboxes if cb.checked]
-            period_months = int(period_select.value)
-
-            if not keywords or not selected_platforms:
-                status_div.innerText = "キーワードとプラットフォームを選択してください。"
-                return
-
-            all_results = {}
-            tasks = []
-            for platform in selected_platforms:
-                status_div.innerText += f"\n{platform}のデータを取得中..."
-                # fetch_dataを非同期に呼び出すタスクを作成
-                tasks.append(asyncio.create_task(fetch_data(keywords, platform)))
-
-            # すべてのAPI呼び出しを並行して実行し、結果を待つ
-            api_responses = await asyncio.gather(*tasks)
-
-            status_div.innerText = "データ処理中..."
-            for platform, response in zip(selected_platforms, api_responses):
-                if response:
-                    processed = process_api_data(response, keywords)
-                    if processed:
-                        all_results[platform] = processed
-                    else:
-                         status_div.innerText += f"\n{platform}: データが見つからないか、処理に失敗しました。"
-                else:
-                    # fetch_data内でエラーメッセージ表示済み
-                    pass
-
-            if not all_results:
-                status_div.innerText += "\n有効なデータが取得できませんでした。"
-                return
-
-            # ここでグラフ描画処理を呼び出す (次のステップで実装)
-            # plot_trends(all_results, period_months)
-            status_div.innerText = "検索完了 (グラフ表示は未実装)"
-            print("Processed Data:", all_results) # デバッグ用
-
-        search_button.addEventListener("click", search_trends)
 
         def plot_trends(data, period_months):
             """処理されたデータを使用してトレンドグラフをプロットする"""
+            # Plotlyのグラフオブジェクトを作成
             fig = go.Figure()
-            platform_colors = {
-                'Google': 'blue',
-                'Instagram': 'purple', # 要件定義に合わせて修正 (元は'magenta')
-                'TikTok': 'black'
-            }
-
+            
             if not data:
                 chart_div.innerHTML = "<p>表示するデータがありません。</p>"
                 return
@@ -241,94 +365,231 @@
                             latest_date = current_latest
 
             if latest_date is None:
-                 chart_div.innerHTML = "<p>有効な日付データが見つかりませんでした。</p>"
-                 return
+                chart_div.innerHTML = "<p>有効な日付データが見つかりませんでした。</p>"
+                return
 
-            # 開始日を計算 (period_months前の月の1日)
-            start_year = latest_date.year
-            start_month = latest_date.month - period_months + 1
+            # 現在の日付から過去period_months分の期間を計算
+            today = datetime.now()
+            start_year = today.year
+            start_month = today.month - period_months
+            
+            # 月が負の値になった場合は前年に調整
             while start_month <= 0:
                 start_month += 12
                 start_year -= 1
+                
             start_date_cutoff = datetime(start_year, start_month, 1)
-
+            
+            # データをプロット
             has_data_to_plot = False
             for platform, platform_data in data.items():
-                color = platform_colors.get(platform, 'grey') # 未定義プラットフォームは灰色
+                color = PLATFORM_COLORS.get(platform, 'grey')  # 未定義プラットフォームは灰色
+                
                 for keyword, kw_data in platform_data.items():
                     trends = kw_data.get('trends', {})
+                    
                     # 期間でフィルタリングし、日付を文字列に変換
                     filtered_trends = {dt.strftime('%Y/%m'): vol for dt, vol in trends.items() if dt >= start_date_cutoff}
-
+                    
                     if filtered_trends:
                         has_data_to_plot = True
                         dates = list(filtered_trends.keys())
                         volumes = list(filtered_trends.values())
+                        
+                        # 折れ線グラフを追加
                         fig.add_trace(go.Scatter(
                             x=dates,
                             y=volumes,
                             mode='lines+markers',
                             name=f'{keyword} ({platform})',
-                            line=dict(color=color)
+                            line=dict(color=color, width=2),
+                            marker=dict(size=8)
                         ))
 
             if not has_data_to_plot:
                 chart_div.innerHTML = f"<p>指定された期間 ({period_months}ヶ月) に表示できるデータがありません。</p>"
                 return
 
+            # グラフのレイアウト設定
             fig.update_layout(
-                title='キーワード検索ボリューム推移',
+                title={
+                    'text': 'キーワード検索ボリューム推移',
+                    'y': 0.95,
+                    'x': 0.5,
+                    'xanchor': 'center',
+                    'yanchor': 'top'
+                },
                 xaxis_title='年月',
                 yaxis_title='検索ボリューム',
-                hovermode='x unified' # ホバー時の挙動
+                hovermode='x unified',  # ホバー時の挙動
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.2,
+                    xanchor="center",
+                    x=0.5
+                ),
+                margin=dict(l=50, r=50, t=80, b=100),
+                plot_bgcolor='rgba(240,240,240,0.2)',
+                paper_bgcolor='rgba(0,0,0,0)'
             )
+            
+            # グリッド線の設定
+            fig.update_xaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200,200,200,0.2)'
+            )
+            fig.update_yaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200,200,200,0.2)'
+            )
+            
             # display関数でグラフを描画
             display(fig, target="chart", append=False)
-            status_div.innerText += "\nグラフ描画完了。"
+            update_status("グラフ描画完了", append=True)
 
-        # search_trends内の呼び出し部分を修正
         async def search_trends(event):
-            status_div.innerText = "検索中..."
-            chart_div.innerHTML = "" # 前回のグラフをクリア
-
+            """検索ボタンクリック時の処理"""
+            # 入力値の取得と検証
             keywords = [kw.strip() for kw in keywords_input.value.split(",") if kw.strip()]
             selected_platforms = [cb.value for cb in platform_checkboxes if cb.checked]
             period_months = int(period_select.value)
-
-            if not keywords or not selected_platforms:
-                status_div.innerText = "キーワードとプラットフォームを選択してください。"
+            
+            # 入力チェック
+            if not keywords:
+                update_status("キーワードを入力してください。")
                 return
-
-            all_results = {}
-            tasks = []
-            status_div.innerText = "データ取得開始..."
-            for platform in selected_platforms:
-                status_div.innerText += f"\n{platform}のデータを取得中..."
-                tasks.append(asyncio.create_task(fetch_data(keywords, platform)))
-
-            api_responses = await asyncio.gather(*tasks)
-
-            status_div.innerText = "データ処理中..."
-            for platform, response in zip(selected_platforms, api_responses):
-                if response:
-                    processed = process_api_data(response, keywords)
-                    if processed:
-                        all_results[platform] = processed
-                    else:
-                         status_div.innerText += f"\n{platform}: データが見つからないか、処理に失敗しました。"
-                # else: fetch_data内でエラーメッセージ表示済み
-
-            if not all_results:
-                status_div.innerText += "\n有効なデータが取得できませんでした。グラフは表示されません。"
+                
+            if not selected_platforms:
+                update_status("少なくとも1つのプラットフォームを選択してください。")
                 return
+            
+            # UI状態の更新
+            chart_div.innerHTML = ""  # 前回のグラフをクリア
+            update_status("検索を開始します...")
+            show_loading(True)
+            search_button.disabled = True
+            
+            try:
+                # 各プラットフォームのデータ取得タスクを作成
+                all_results = {}
+                tasks = []
+                
+                for platform in selected_platforms:
+                    tasks.append(asyncio.create_task(fetch_data(keywords, platform)))
+                
+                # すべてのAPI呼び出しを並行して実行
+                api_responses = await asyncio.gather(*tasks)
+                
+                # データ処理
+                update_status("データを処理中...", append=True)
+                for platform, response in zip(selected_platforms, api_responses):
+                    if response:
+                        processed = process_api_data(response, keywords)
+                        if processed:
+                            all_results[platform] = processed
+                        else:
+                            update_status(f"{platform}: データが見つからないか、処理に失敗しました。", append=True)
+                
+                # 結果の検証
+                if not all_results:
+                    update_status("有効なデータが取得できませんでした。グラフは表示されません。", append=True)
+                    return
+                
+                # グラフ描画
+                update_status("グラフを描画中...", append=True)
+                plot_trends(all_results, period_months)
+                
+            except Exception as e:
+                error_details = traceback.format_exc()
+                update_status(f"エラーが発生しました: {str(e)}", append=True)
+                print("Error:", error_details)
+                
+            finally:
+                # UI状態を元に戻す
+                show_loading(False)
+                search_button.disabled = False
 
-            status_div.innerText += "\nグラフ描画中..."
-            # グラフ描画処理を呼び出す
-            plot_trends(all_results, period_months)
-            # print("Processed Data:", all_results) # デバッグ用
-
+        # 検索ボタンにイベントリスナーを設定
+        search_button.addEventListener("click", search_trends)
+        
+        # 初期メッセージ
+        update_status("キーワードを入力して検索ボタンをクリックしてください。")
+        
+        # デモデータの設定（APIが利用できない場合のテスト用）
+        def generate_demo_data():
+            """デモ用のダミーデータを生成する関数"""
+            today = datetime.now()
+            demo_data = {
+                'Google': {
+                    'ファッション': {
+                        'volume': 12000,
+                        'cpc': 1.25,
+                        'trends': {}
+                    },
+                    '旅行': {
+                        'volume': 8500,
+                        'cpc': 2.10,
+                        'trends': {}
+                    }
+                },
+                'Instagram': {
+                    'ファッション': {
+                        'volume': 15000,
+                        'cpc': 0.95,
+                        'trends': {}
+                    },
+                    '旅行': {
+                        'volume': 9200,
+                        'cpc': 1.75,
+                        'trends': {}
+                    }
+                },
+                'TikTok': {
+                    'ファッション': {
+                        'volume': 18000,
+                        'cpc': 0.85,
+                        'trends': {}
+                    },
+                    '旅行': {
+                        'volume': 7800,
+                        'cpc': 1.50,
+                        'trends': {}
+                    }
+                }
+            }
+            
+            # 過去12ヶ月分のデータを生成
+            for i in range(12):
+                date = today - timedelta(days=30 * i)
+                date = datetime(date.year, date.month, 1)
+                
+                # 各プラットフォーム・キーワードの組み合わせにデータを追加
+                for platform in demo_data:
+                    for keyword in demo_data[platform]:
+                        # 基本ボリュームに季節変動を加える
+                        base_volume = demo_data[platform][keyword]['volume']
+                        seasonal_factor = 1 + 0.2 * ((date.month % 12) / 12)  # 季節変動
+                        trend_factor = 1 + 0.05 * (i / 12)  # トレンド（古いデータほど少し低め）
+                        random_factor = 0.9 + 0.2 * ((hash(f"{platform}{keyword}{date}") % 100) / 100)  # ランダム変動
+                        
+                        volume = int(base_volume * seasonal_factor * trend_factor * random_factor)
+                        demo_data[platform][keyword]['trends'][date] = volume
+            
+            return demo_data
+        
+        # デモデータを使用したテスト関数
+        async def test_with_demo_data():
+            """デモデータを使用してグラフをテスト表示する"""
+            demo_data = generate_demo_data()
+            plot_trends(demo_data, 12)
+            update_status("デモデータでグラフを表示しています。実際のAPIデータではありません。")
+        
+        # デバッグ用: コメントを外すとデモデータでテスト可能
+        # asyncio.ensure_future(test_with_demo_data())
     </py-script>
 
 </body>
 </html>
-
