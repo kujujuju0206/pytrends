@@ -34,6 +34,23 @@
     button:hover {
       background-color: #45a049;
     }
+    #status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
+    .loading {
+      background-color: #d9edf7;
+      color: #31708f;
+    }
   </style>
 </head>
 <body>
@@ -61,20 +78,264 @@
     </div>
     
     <button id="searchButton" style="margin-top: 10px;">Search</button>
+    <div id="status"></div>
   </div>
   
   <div class="chart-container">
     <canvas id="myChart"></canvas>
   </div>
 
+  <!-- JavaScript fallback in case Ruby.wasm fails -->
+  <script>
+    // Check if Ruby.wasm is loaded
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() {
+        // If Ruby.wasm hasn't initialized after 3 seconds, use JavaScript fallback
+        if (!window.rubyInitialized) {
+          console.log("Ruby.wasm not initialized, using JavaScript fallback");
+          initJavaScriptFallback();
+        }
+      }, 3000);
+    });
+
+    function initJavaScriptFallback() {
+      // Function to generate demo data
+      function generateDemoData(keywords, platforms, months=12) {
+        const today = new Date();
+        const demoData = {};
+        
+        // Each platform's data
+        platforms.forEach(platform => {
+          demoData[platform] = {};
+          
+          // Each keyword's data
+          keywords.forEach(keyword => {
+            // Base volume
+            const baseVolume = Math.floor(Math.random() * 15000) + 5000;
+            
+            // CPC
+            const cpc = (Math.random() * 2.5 + 0.5).toFixed(2);
+            
+            // Monthly trends
+            const monthlyTrends = {};
+            
+            // Past months data
+            for (let i = 0; i < months; i++) {
+              // Calculate date (going backward from today)
+              const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+              
+              // Seasonal factor (peaks in January and July)
+              const monthFactor = 1 + 0.2 * Math.abs(((date.getMonth()) % 12) / 6 - 1);
+              
+              // Trend factor (slight increase over time)
+              const trendFactor = 1 + 0.05 * (i / months);
+              
+              // Random variation (±10%)
+              const randomFactor = 0.9 + 0.2 * Math.random();
+              
+              // Platform-specific variation
+              let platformFactor = 1.0;
+              if (platform === 'TikTok') {
+                platformFactor = 1.0 + (0.1 * (months - i) / months);
+              } else if (platform === 'YouTube') {
+                platformFactor = 1.0 + (0.08 * (months - i) / months);
+              } else if (platform === 'X') {
+                platformFactor = 1.0 + (0.03 * (months - i) / months);
+              }
+              
+              // Final volume calculation
+              const volume = Math.floor(baseVolume * monthFactor / trendFactor * randomFactor * platformFactor);
+              
+              // Store result
+              const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+              monthlyTrends[dateKey] = volume;
+            }
+            
+            // Calculate average volume
+            const volumes = Object.values(monthlyTrends);
+            const avgVolume = Math.floor(volumes.reduce((a, b) => a + b, 0) / volumes.length);
+            
+            // Store keyword data
+            demoData[platform][keyword] = {
+              'volume': avgVolume,
+              'cpc': parseFloat(cpc),
+              'trends': monthlyTrends
+            };
+          });
+        });
+        
+        return demoData;
+      }
+      
+      // Process data for Chart.js
+      function prepareChartData(demoData, periodMonths=12) {
+        // Calculate start date
+        const today = new Date();
+        const startDate = new Date(today.getFullYear(), today.getMonth() - periodMonths + 1, 1);
+        
+        // Platform colors
+        const platformColors = {
+          'Google': 'blue',
+          'YouTube': 'red',
+          'X': 'black',
+          'TikTok': 'purple'
+        };
+        
+        // Collect all dates
+        const allDates = [];
+        Object.entries(demoData).forEach(([platform, platformData]) => {
+          Object.entries(platformData).forEach(([keyword, keywordData]) => {
+            Object.keys(keywordData.trends).forEach(dateStr => {
+              const date = new Date(dateStr);
+              if (date >= startDate) {
+                allDates.push(date);
+              }
+            });
+          });
+        });
+        
+        // Sort dates and create labels
+        const uniqueDates = [...new Set(allDates.map(d => d.getTime()))].map(t => new Date(t)).sort((a, b) => a - b);
+        const labels = uniqueDates.map(date => `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}`);
+        
+        // Create datasets
+        const datasets = [];
+        Object.entries(demoData).forEach(([platform, platformData]) => {
+          Object.entries(platformData).forEach(([keyword, keywordData]) => {
+            const dataPoints = [];
+            
+            // For each label (date), find the corresponding value or use null
+            uniqueDates.forEach(date => {
+              const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+              dataPoints.push(keywordData.trends[dateStr] || null);
+            });
+            
+            // Create dataset object
+            datasets.push({
+              label: `${keyword} (${platform})`,
+              data: dataPoints,
+              borderColor: platformColors[platform] || 'gray',
+              backgroundColor: platformColors[platform] || 'gray',
+              tension: 0.1
+            });
+          });
+        });
+        
+        return { labels, datasets };
+      }
+      
+      // Function to render the chart
+      function renderChart(chartData) {
+        // Get the chart canvas
+        const canvas = document.getElementById('myChart');
+        
+        // Create chart configuration
+        const config = {
+          type: 'line',
+          data: chartData,
+          options: {
+            responsive: true,
+            plugins: {
+              title: {
+                display: true,
+                text: 'Keyword Search Volume Trends'
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                title: {
+                  display: true,
+                  text: 'Month'
+                }
+              },
+              y: {
+                display: true,
+                title: {
+                  display: true,
+                  text: 'Search Volume'
+                },
+                beginAtZero: true
+              }
+            }
+          }
+        };
+        
+        // Create the chart
+        new Chart(canvas, config);
+      }
+      
+      // Function to handle search button click
+      function onSearchClick() {
+        // Show loading status
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = "Generating data...";
+        statusDiv.className = "loading";
+        
+        // Get input values
+        const keywordsInput = document.getElementById('keywords').value;
+        const keywords = keywordsInput.split(',').map(k => k.trim()).filter(k => k);
+        
+        // Get selected platforms
+        const platforms = [];
+        if (document.getElementById('google').checked) platforms.push('Google');
+        if (document.getElementById('youtube').checked) platforms.push('YouTube');
+        if (document.getElementById('twitter').checked) platforms.push('X');
+        if (document.getElementById('tiktok').checked) platforms.push('TikTok');
+        
+        // Get period
+        const periodSelect = document.getElementById('period');
+        const periodMonths = parseInt(periodSelect.value);
+        
+        // Generate demo data
+        console.log("Generating demo data for keywords:", keywords.join(', '));
+        const demoData = generateDemoData(keywords, platforms, periodMonths);
+        
+        // Prepare chart data
+        const chartData = prepareChartData(demoData, periodMonths);
+        
+        // Render chart
+        renderChart(chartData);
+        
+        // Show success status
+        statusDiv.textContent = "Chart rendered successfully (JavaScript fallback)";
+        statusDiv.className = "success";
+        
+        console.log("Chart rendered successfully");
+      }
+      
+      // Attach event listener to search button
+      const searchButton = document.getElementById('searchButton');
+      searchButton.addEventListener('click', onSearchClick);
+      
+      // Initial chart render with default values
+      console.log("Initializing with default values (JavaScript fallback)");
+      onSearchClick();
+    }
+  </script>
+
   <script type="text/ruby">
     require 'js'
     require 'json'
     require 'date'
 
+    # Set flag to indicate Ruby.wasm is initialized
+    JS.global[:rubyInitialized] = true
+    
     # Access DOM elements
     document = JS.global[:document]
     console = JS.global[:console]
+    
+    # Function to show status message
+    def show_status(message, type)
+      status_div = document.getElementById('status')
+      status_div[:textContent] = message
+      status_div[:className] = type
+    end
     
     # Function to generate demo data (similar to your Python version)
     def generate_demo_data(keywords, platforms, months=12)
@@ -201,88 +462,129 @@
     
     # Function to render the chart
     def render_chart(chart_data)
-      # Get the chart canvas
-      canvas = document.getElementById('myChart')
-      
-      # Create chart configuration
-      config = {
-        type: 'line',
-        data: chart_data,
-        options: {
-          responsive: true,
-          plugins: {
-            title: {
-              display: true,
-              text: 'Keyword Search Volume Trends'
-            },
-            tooltip: {
-              mode: 'index',
-              intersect: false
-            }
-          },
-          scales: {
-            x: {
-              display: true,
+      begin
+        # Get the chart canvas
+        canvas = document.getElementById('myChart')
+        
+        # Create chart configuration
+        config = {
+          type: 'line',
+          data: chart_data,
+          options: {
+            responsive: true,
+            plugins: {
               title: {
                 display: true,
-                text: 'Month'
+                text: 'Keyword Search Volume Trends'
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false
               }
             },
-            y: {
-              display: true,
-              title: {
+            scales: {
+              x: {
                 display: true,
-                text: 'Search Volume'
+                title: {
+                  display: true,
+                  text: 'Month'
+                }
               },
-              beginAtZero: true
+              y: {
+                display: true,
+                title: {
+                  display: true,
+                  text: 'Search Volume'
+                },
+                beginAtZero: true
+              }
             }
           }
         }
-      }
-      
-      # Create the chart
-      JS.global[:Chart].new(canvas, config)
+        
+        # Check if Chart is available
+        if JS.global[:Chart]
+          # Create the chart
+          JS.global[:Chart].new(canvas, config)
+          return true
+        else
+          console.error("Chart.js not found")
+          return false
+        end
+      rescue => e
+        console.error("Error rendering chart: #{e.message}")
+        return false
+      end
     end
     
     # Function to handle search button click
     def on_search_click
-      # Get input values
-      keywords_input = document.getElementById('keywords')[:value]
-      keywords = keywords_input.split(',').map(&:strip).reject(&:empty?)
-      
-      # Get selected platforms
-      platforms = []
-      platforms << 'Google' if document.getElementById('google')[:checked]
-      platforms << 'YouTube' if document.getElementById('youtube')[:checked]
-      platforms << 'X' if document.getElementById('twitter')[:checked]
-      platforms << 'TikTok' if document.getElementById('tiktok')[:checked]
-      
-      # Get period
-      period_select = document.getElementById('period')
-      period_months = period_select[:value].to_i
-      
-      # Generate demo data
-      console.log("Generating demo data for keywords: #{keywords.join(', ')}")
-      demo_data = generate_demo_data(keywords, platforms, period_months)
-      
-      # Prepare chart data
-      chart_data = prepare_chart_data(demo_data, period_months)
-      
-      # Render chart
-      render_chart(chart_data)
-      
-      console.log("Chart rendered successfully")
+      begin
+        # Show loading status
+        show_status("Generating data...", "loading")
+        
+        # Get input values
+        keywords_input = document.getElementById('keywords')[:value]
+        keywords = keywords_input.split(',').map(&:strip).reject(&:empty?)
+        
+        if keywords.empty?
+          show_status("Please enter at least one keyword", "error")
+          return
+        end
+        
+        # Get selected platforms
+        platforms = []
+        platforms << 'Google' if document.getElementById('google')[:checked]
+        platforms << 'YouTube' if document.getElementById('youtube')[:checked]
+        platforms << 'X' if document.getElementById('twitter')[:checked]
+        platforms << 'TikTok' if document.getElementById('tiktok')[:checked]
+        
+        if platforms.empty?
+          show_status("Please select at least one platform", "error")
+          return
+        end
+        
+        # Get period
+        period_select = document.getElementById('period')
+        period_months = period_select[:value].to_i
+        
+        # Generate demo data
+        console.log("Generating demo data for keywords: #{keywords.join(', ')}")
+        demo_data = generate_demo_data(keywords, platforms, period_months)
+        
+        # Prepare chart data
+        chart_data = prepare_chart_data(demo_data, period_months)
+        
+        # Render chart
+        if render_chart(chart_data)
+          show_status("Chart rendered successfully (Ruby.wasm)", "success")
+          console.log("Chart rendered successfully")
+        else
+          show_status("Failed to render chart. Check console for errors.", "error")
+        end
+      rescue => e
+        console.error("Error in search click handler: #{e.message}")
+        show_status("An error occurred: #{e.message}", "error")
+      end
     end
     
-    # Attach event listener to search button
-    search_button = document.getElementById('searchButton')
-    search_button.addEventListener('click') do |event|
-      on_search_click
+    begin
+      # Attach event listener to search button
+      search_button = document.getElementById('searchButton')
+      if search_button
+        search_button.addEventListener('click') do |event|
+          on_search_click
+        end
+        
+        # Initial chart render with default values
+        console.log("Initializing with default values (Ruby.wasm)")
+        on_search_click
+      else
+        console.error("Search button not found")
+      end
+    rescue => e
+      console.error("Error setting up event listener: #{e.message}")
     end
-    
-    # Initial chart render with default values
-    console.log("Initializing with default values")
-    on_search_click
   </script>
 </body>
 </html>
