@@ -31,6 +31,16 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(data);
     });
+  } else if (req.url === '/tsubaki-factory-chart.html') {
+    fs.readFile(path.join(__dirname, 'tsubaki-factory-chart.html'), (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Error loading tsubaki-factory-chart.html');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
   } else if (req.url === '/menu') {
     // Create a simple menu page
     const menuHtml = `
@@ -84,6 +94,10 @@ const server = http.createServer((req, res) => {
           <li>
             <a href="/advanced.html">Advanced Example</a>
             <div class="description">Full-featured implementation with API support, CSV export, and improved UI</div>
+          </li>
+          <li>
+            <a href="/tsubaki-factory-chart.html">つばきファクトリー Chart</a>
+            <div class="description">Real API data for "つばきファクトリー" keyword with Chart.js visualization</div>
           </li>
         </ul>
       </body>

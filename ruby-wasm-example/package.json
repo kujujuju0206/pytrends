@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "@ruby/3.4-wasm-wasi": "^2.7.1",
-    "chart.js": "^4.4.9"
+    "chart.js": "^4.4.9",
+    "node-fetch": "^2.7.0"
   }
 }
