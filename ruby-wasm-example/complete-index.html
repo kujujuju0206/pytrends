@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>キーワードボリューム分析ツール - Ruby.wasm + Chart.js</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ruby/3.4-wasm-wasi@2.7.1/dist/browser.script.iife.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .chart-container {
+      width: 100%;
+      height: 500px;
+      margin-top: 30px;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    #controls {
+      margin-top: 20px;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: inline-block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"], select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+    }
+    .checkbox-item input {
+      margin-right: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+      display: block !important;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+      display: block !important;
+    }
+    .loading {
+      background-color: #d9edf7;
+      color: #31708f;
+      display: block !important;
+    }
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    #demoNotice {
+      text-align: center;
+      margin-top: 10px;
+      color: #666;
+      font-style: italic;
+    }
+    .tabs {
+      display: flex;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      background-color: #f1f1f1;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .tab.active {
+      background-color: white;
+      border-bottom: none;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .info {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+    }
+    .info h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+    .info p {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>キーワードボリューム分析ツール</h1>
+  
+  <div class="tabs">
+    <div class="tab active" data-tab="search">検索</div>
+    <div class="tab" data-tab="tsubaki">つばきファクトリー</div>
+  </div>
+  
+  <div id="search-tab" class="tab-content active">
+    <div id="controls">
+      <div class="form-group">
+        <label for="keywords">キーワード (カンマ区切り):</label>
+        <input type="text" id="keywords" value="ファッション,旅行,スポーツ">
+      </div>
+      
+      <div class="form-group">
+        <label>プラットフォーム:</label>
+        <div class="checkbox-group">
+          <div class="checkbox-item">
+            <input type="checkbox" id="google" checked>
+            <label for="google">Google</label>
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" id="youtube">
+            <label for="youtube">YouTube</label>
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" id="twitter">
+            <label for="twitter">X (Twitter)</label>
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" id="tiktok">
+            <label for="tiktok">TikTok</label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="period">期間:</label>
+        <select id="period">
+          <option value="12">過去12ヶ月</option>
+          <option value="6">過去6ヶ月</option>
+          <option value="3">過去3ヶ月</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="apiKey">APIキー (オプション):</label>
+        <input type="text" id="apiKey" value="ebf17c9dfc6a862ee5944ffc434fc959e6a38f35" placeholder="Keyword Tool APIキーを入力">
+      </div>
+      
+      <div class="button-group">
+        <button id="searchButton">検索</button>
+        <button id="exportButton" disabled>CSVにエクスポート</button>
+      </div>
+      
+      <div id="status"></div>
+      <div id="demoNotice"></div>
+    </div>
+    
+    <div class="chart-container">
+      <canvas id="myChart"></canvas>
+    </div>
+  </div>
+  
+  <div id="tsubaki-tab" class="tab-content">
+    <div class="chart-container">
+      <canvas id="tsubakiChart"></canvas>
+    </div>
+    
+    <div class="info">
+      <h2>キーワード情報</h2>
+      <p><strong>キーワード:</strong> つばきファクトリー</p>
+      <p><strong>平均検索ボリューム:</strong> 90,500</p>
+      <p><strong>CPC:</strong> 50.35円</p>
+      <p><strong>データソース:</strong> Google検索</p>
+    </div>
+  </div>
+
+  <!-- JavaScript fallback in case Ruby.wasm fails -->
+  <script>
+    // タブ切り替え機能
+    document.addEventListener('DOMContentLoaded', function() {
+      const tabs = document.querySelectorAll('.tab');
+      const tabContents = document.querySelectorAll('.tab-content');
+      
+      tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+          const tabId = this.getAttribute('data-tab');
+          
+          // タブのアクティブ状態を切り替え
+          tabs.forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          
+          // コンテンツの表示/非表示を切り替え
+          tabContents.forEach(content => {
+            content.classList.remove('active');
+            if (content.id === tabId + '-tab') {
+              content.classList.add('active');
+            }
+          });
+          
+          // つばきファクトリータブが選択された場合、グラフを描画
+          if (tabId === 'tsubaki') {
+            renderTsubakiChart();
+          }
+        });
+      });
+    });
+
+    // つばきファクトリーのグラフを描画
+    function renderTsubakiChart() {
+      const chartData = {
+        "labels": [
+          "2024/06",
+          "2024/07",
+          "2024/08",
+          "2024/09",
+          "2024/10",
+          "2024/11",
+          "2024/12",
+          "2025/01",
+          "2025/02",
+          "2025/03"
+        ],
+        "datasets": [
+          {
+            "label": "つばきファクトリー (Google)",
+            "data": [
+              201000,
+              90500,
+              90500,
+              60500,
+              60500,
+              74000,
+              74000,
+              90500,
+              60500,
+              90500
+            ],
+            "borderColor": "rgba(66, 133, 244, 1)",
+            "backgroundColor": "rgba(66, 133, 244, 1)",
+            "borderWidth": 2,
+            "tension": 0.1,
+            "pointRadius": 3,
+            "pointHoverRadius": 5
+          }
+        ]
+      };
+
+      const ctx = document.getElementById('tsubakiChart').getContext('2d');
+      
+      // 既存のチャートがあれば破棄
+      if (window.tsubakiChartInstance) {
+        window.tsubakiChartInstance.destroy();
+      }
+      
+      window.tsubakiChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'つばきファクトリー 検索ボリューム推移',
+              font: {
+                size: 18
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  if (context.parsed.y !== null) {
+                    label += new Intl.NumberFormat('ja-JP').format(context.parsed.y);
+                  }
+                  return label;
+                }
+              }
+            },
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12
+              }
+            }
+          },
+          scales: {
+            x: {
+              display: true,
+              title: {
+                display: true,
+                text: '年月'
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: '検索ボリューム'
+              },
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return new Intl.NumberFormat('ja-JP').format(value);
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Check if Ruby.wasm is loaded
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() {
+        // If Ruby.wasm hasn't initialized after 3 seconds, use JavaScript fallback
+        if (!window.rubyInitialized) {
+          console.log("Ruby.wasm not initialized, using JavaScript fallback");
+          initJavaScriptFallback();
+        }
+      }, 3000);
+    });
+
+    function initJavaScriptFallback() {
+      // Show fallback notice
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = "Ruby.wasmが利用できないため、JavaScriptフォールバックを使用しています";
+      statusDiv.className = "loading";
+      
+      // Function to generate demo data
+      function generateDemoData(keywords, platforms, months=12) {
+        const today = new Date();
+        const demoData = {};
+        
+        // Each platform's data
+        platforms.forEach(platform => {
+          demoData[platform] = {};
+          
+          // Each keyword's data
+          keywords.forEach(keyword => {
+            // Base volume
+            const baseVolume = Math.floor(Math.random() * 15000) + 5000;
+            
+            // CPC
+            const cpc = (Math.random() * 2.5 + 0.5).toFixed(2);
+            
+            // Monthly trends
+            const monthlyTrends = {};
+            
+            // Past months data
+            for (let i = 0; i < months; i++) {
+              // Calculate date (going backward from today)
+              const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+              
+              // Seasonal factor (peaks in January and July)
+              const monthFactor = 1 + 0.2 * Math.abs(((date.getMonth()) % 12) / 6 - 1);
+              
+              // Trend factor (slight increase over time)
+              const trendFactor = 1 + 0.05 * (i / months);
+              
+              // Random variation (±10%)
+              const randomFactor = 0.9 + 0.2 * Math.random();
+              
+              // Platform-specific variation
+              let platformFactor = 1.0;
+              if (platform === 'TikTok') {
+                platformFactor = 1.0 + (0.1 * (months - i) / months);
+              } else if (platform === 'YouTube') {
+                platformFactor = 1.0 + (0.08 * (months - i) / months);
+              } else if (platform === 'X') {
+                platformFactor = 1.0 + (0.03 * (months - i) / months);
+              }
+              
+              // Final volume calculation
+              const volume = Math.floor(baseVolume * monthFactor / trendFactor * randomFactor * platformFactor);
+              
+              // Store result
+              const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+              monthlyTrends[dateKey] = volume;
+            }
+            
+            // Calculate average volume
+            const volumes = Object.values(monthlyTrends);
+            const avgVolume = Math.floor(volumes.reduce((a, b) => a + b, 0) / volumes.length);
+            
+            // Store keyword data
+            demoData[platform][keyword] = {
+              'volume': avgVolume,
+              'cpc': parseFloat(cpc),
+              'trends': monthlyTrends
+            };
+          });
+        });
+        
+        return demoData;
+      }
+      
+      // Process data for Chart.js
+      function prepareChartData(demoData, periodMonths=12) {
+        // Calculate start date
+        const today = new Date();
+        const startDate = new Date(today.getFullYear(), today.getMonth() - periodMonths + 1, 1);
+        
+        // Platform colors
+        const platformColors = {
+          'Google': 'rgba(66, 133, 244, 1)',
+          'YouTube': 'rgba(255, 0, 0, 1)',
+          'X': 'rgba(29, 161, 242, 1)',
+          'TikTok': 'rgba(238, 29, 82, 1)'
+        };
+        
+        // Collect all dates
+        const allDates = [];
+        Object.entries(demoData).forEach(([platform, platformData]) => {
+          Object.entries(platformData).forEach(([keyword, keywordData]) => {
+            Object.keys(keywordData.trends).forEach(dateStr => {
+              const date = new Date(dateStr);
+              if (date >= startDate) {
+                allDates.push(date);
+              }
+            });
+          });
+        });
+        
+        // Sort dates and create labels
+        const uniqueDates = [...new Set(allDates.map(d => d.getTime()))].map(t => new Date(t)).sort((a, b) => a - b);
+        const labels = uniqueDates.map(date => `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}`);
+        
+        // Create datasets
+        const datasets = [];
+        Object.entries(demoData).forEach(([platform, platformData]) => {
+          Object.entries(platformData).forEach(([keyword, keywordData]) => {
+            const dataPoints = [];
+            
+            // For each label (date), find the corresponding value or use null
+            uniqueDates.forEach(date => {
+              const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+              dataPoints.push(keywordData.trends[dateStr] || null);
+            });
+            
+            // Create dataset object
+            datasets.push({
+              label: `${keyword} (${platform})`,
+              data: dataPoints,
+              borderColor: platformColors[platform] || 'gray',
+              backgroundColor: platformColors[platform] || 'gray',
+              borderWidth: 2,
+              tension: 0.1,
+              pointRadius: 3,
+              pointHoverRadius: 5
+            });
+          });
+        });
+        
+        return { labels, datasets };
+      }
+      
+      // Function to render the chart
+      function renderChart(chartData) {
+        // Get the chart canvas
+        const canvas = document.getElementById('myChart');
+        
+        // Create chart configuration
+        const config = {
+          type: 'line',
+          data: chartData,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: 'キーワード検索ボリューム推移',
+                font: {
+                  size: 18
+                }
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: function(context) {
+                    let label = context.dataset.label || '';
+                    if (label) {
+                      label += ': ';
+                    }
+                    if (context.parsed.y !== null) {
+                      label += new Intl.NumberFormat('ja-JP').format(context.parsed.y);
+                    }
+                    return label;
+                  }
+                }
+              },
+              legend: {
+                position: 'top',
+                labels: {
+                  boxWidth: 12
+                }
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                title: {
+                  display: true,
+                  text: '年月'
+                }
+              },
+              y: {
+                display: true,
+                title: {
+                  display: true,
+                  text: '検索ボリューム'
+                },
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return new Intl.NumberFormat('ja-JP').format(value);
+                  }
+                }
+              }
+            }
+          }
+        };
+        
+        // If chart already exists, destroy it
+        if (window.chartInstance) {
+          window.chartInstance.destroy();
+        }
+        
+        // Create the chart
+        window.chartInstance = new Chart(canvas, config);
+        
+        // Store last data for export
+        window.lastData = chartData;
+      }
+      
+      // Function to export data to CSV
+      function exportToCSV() {
+        if (!window.lastData) {
+          alert('エクスポートするデータがありません。まず検索を実行してください。');
+          return;
+        }
+        
+        const labels = window.lastData.labels;
+        const datasets = window.lastData.datasets;
+        
+        // Create CSV content
+        let csvContent = "キーワード,プラットフォーム,";
+        
+        // Add date headers
+        csvContent += labels.join(',') + '\n';
+        
+        // Add data rows
+        datasets.forEach(dataset => {
+          const parts = dataset.label.match(/(.*) \((.*)\)/);
+          const keyword = parts ? parts[1] : dataset.label;
+          const platform = parts ? parts[2] : '';
+          
+          csvContent += `"${keyword}","${platform}",`;
+          csvContent += dataset.data.map(val => val || '').join(',') + '\n';
+        });
+        
+        // Create download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'keyword_volume_data.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      
+      // Function to handle search button click
+      function onSearchClick() {
+        // Show loading status
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = "データを生成中...";
+        statusDiv.className = "loading";
+        
+        // Get input values
+        const keywordsInput = document.getElementById('keywords').value;
+        const keywords = keywordsInput.split(',').map(k => k.trim()).filter(k => k);
+        
+        if (keywords.length === 0) {
+          statusDiv.textContent = "キーワードを入力してください";
+          statusDiv.className = "error";
+          return;
+        }
+        
+        // Get selected platforms
+        const platforms = [];
+        if (document.getElementById('google').checked) platforms.push('Google');
+        if (document.getElementById('youtube').checked) platforms.push('YouTube');
+        if (document.getElementById('twitter').checked) platforms.push('X');
+        if (document.getElementById('tiktok').checked) platforms.push('TikTok');
+        
+        if (platforms.length === 0) {
+          statusDiv.textContent = "少なくとも1つのプラットフォームを選択してください";
+          statusDiv.className = "error";
+          return;
+        }
+        
+        // Get period
+        const periodSelect = document.getElementById('period');
+        const periodMonths = parseInt(periodSelect.value);
+        
+        // Check if API key is provided
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const demoNotice = document.getElementById('demoNotice');
+        
+        if (!apiKey) {
+          demoNotice.textContent = "APIキーが提供されていないため、デモデータを使用しています";
+        } else {
+          demoNotice.textContent = "APIキーが提供されていますが、JavaScriptフォールバックではデモデータを使用します";
+        }
+        
+        // Generate demo data
+        console.log("Generating demo data for keywords:", keywords.join(', '));
+        const demoData = generateDemoData(keywords, platforms, periodMonths);
+        
+        // Prepare chart data
+        const chartData = prepareChartData(demoData, periodMonths);
+        
+        // Render chart
+        renderChart(chartData);
+        
+        // Enable export button
+        document.getElementById('exportButton').disabled = false;
+        
+        // Show success status
+        statusDiv.textContent = "グラフを描画しました (JavaScriptフォールバック)";
+        statusDiv.className = "success";
+        
+        console.log("Chart rendered successfully");
+      }
+      
+      // Attach event listeners
+      const searchButton = document.getElementById('searchButton');
+      const exportButton = document.getElementById('exportButton');
+      
+      searchButton.addEventListener('click', onSearchClick);
+      exportButton.addEventListener('click', exportToCSV);
+      
+      // Initial chart render with default values
+      console.log("Initializing with default values (JavaScript fallback)");
+      onSearchClick();
+    }
+  </script>
+
+  <script type="text/ruby">
+    require 'js'
+    require 'json'
+    require 'date'
+    require 'csv'
+    require 'stringio'
+
+    # Set flag to indicate Ruby.wasm is initialized
+    JS.global[:rubyInitialized] = true
+    
+    # Access DOM elements
+    document = JS.global[:document]
+    console = JS.global[:console]
+    
+    # Global variables
+    $chart_instance = nil
+    $last_data = nil
+    
+    # API configuration
+    API_CONFIG = {
+      'Google' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/google',
+        'base_body' => {
+          "metrics_location" => [2392],  # Japan
+          "metrics_language" => ["ja"],
+          "metrics_network" => "googlesearchnetwork",
+          "metrics_currency" => "JPY",
+          "output" => "json"
+        }
+      },
+      'YouTube' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/youtube',
+        'base_body' => {
+          "country" => "JP",
+          "metrics_currency" => "JPY",
+          "complete" => false,
+          "output" => "json"
+        }
+      },
+      'X' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/twitter',
+        'base_body' => {
+          "country" => "JP",
+          "metrics_currency" => "JPY",
+          "complete" => false,
+          "output" => "json"
+        }
+      },
+      'TikTok' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/tiktok',
+        'base_body' => {
+          "country" => "JP",
+          "metrics_currency" => "JPY",
+          "complete" => false,
+          "output" => "json"
+        }
+      }
+    }
+    
+    # Platform colors
+    PLATFORM_COLORS = {
+      'Google' => 'rgba(66, 133, 244, 1)',
+      'YouTube' => 'rgba(255, 0, 0, 1)',
+      'X' => 'rgba(29, 161, 242, 1)',
+      'TikTok' => 'rgba(238, 29, 82, 1)'
+    }
+    
+    # Function to show status message
+    def show_status(message, type)
+      status_div = document.getElementById('status')
+      status_div[:textContent] = message
+      status_div[:className] = type
+    end
+    
+    # Function to hide status message
+    def hide_status
+      status_div = document.getElementById('status')
+      status_div[:style][:display] = 'none'
+    end
+    
+    # Function to fetch data from API
+    def fetch_data(keywords, platform, api_key)
+      return nil if !API_CONFIG.key?(platform)
+      
+      config = API_CONFIG[platform]
+      url = config['url']
+      body = config['base_body'].dup
+      body["apikey"] = api_key
+      body["keyword"] = keywords
+      
+      begin
+        console.log("Requesting data from #{platform} API for keywords: #{keywords.join(', ')}...")
+        console.log("API URL: #{url}")
+        
+        # Create fetch options
+        options = {
+          method: 'POST',
+          headers: {
+            'Content-Type' => 'application/json'
+          },
+          body: JSON.generate(body)
+        }
+        
+        console.log("Request body: #{JSON.generate(body)}")
+        
+        # Make the API request
+        response = JS.global.fetch(url, options).await
+        
+        console.log("Response status: #{response[:status]}")
+        
+        if response[:ok]
+          data = response.json.await
+          console.log("#{platform} data fetched successfully")
+          console.log("Response data: #{JSON.generate(data)}")
+          return data
+        else
+          error_text = response.text.await
+          console.error("#{platform} API error: #{response[:status]} - #{error_text}")
+          return nil
+        end
+      rescue => e
+        console.error("Error fetching #{platform} data: #{e.message}")
+        return nil
+      end
+    end
+    
+    # Function to process API response
+    def process_api_data(api_response, keywords)
+      processed_data = {}
+      
+      # Validate API response
+      if !api_response || !api_response.key?('results')
+        console.log("Invalid API response")
+        console.log("API response keys: #{api_response ? api_response.keys.join(', ') : 'nil'}")
+        return processed_data
+      end
+      
+      results = api_response['results']
+      console.log("Results keys: #{results.keys.join(', ')}")
+      
+      # Process each keyword
+      keywords.each do |keyword|
+        console.log("Processing keyword: #{keyword}")
+        if results.key?(keyword)
+          kw_data = results[keyword]
+          console.log("Keyword data keys: #{kw_data.keys.join(', ')}")
+          monthly_trends = {}
+          
+          # Extract monthly data
+          12.times do |i|
+            month_key = "m#{i+1}"
+            year_key = "m#{i+1}_year"
+            month_num_key = "m#{i+1}_month"
+            
+            if kw_data.key?(month_key) && kw_data.key?(year_key) && kw_data.key?(month_num_key)
+              year = kw_data[year_key]
+              month = kw_data[month_num_key]
+              volume = kw_data[month_key]
+              
+              console.log("Month #{i+1}: year=#{year}, month=#{month}, volume=#{volume}")
+              
+              if year && month && volume
+                # Create date key
+                date_key = Date.new(year, month, 1).strftime('%Y-%m-%d')
+                monthly_trends[date_key] = volume
+              end
+            else
+              console.log("Missing data for month #{i+1}")
+            end
+          end
+          
+          # Sort by date
+          monthly_trends = monthly_trends.sort.to_h
+          console.log("Monthly trends: #{monthly_trends.inspect}")
+          
+          # Store processed data
+          processed_data[keyword] = {
+            'volume' => kw_data['volume'],
+            'cpc' => kw_data['cpc'],
+            'trends' => monthly_trends
+          }
+        else
+          console.log("Keyword '#{keyword}' not found in results")
+        end
+      end
+      
+      console.log("Processed data: #{processed_data.inspect}")
+      processed_data
+    end
+    
+    # Function to generate demo data
+    def generate_demo_data(keywords, platforms, months=12)
+      today = Date.today
+      demo_data = {}
+      
+      # Each platform's data
+      platforms.each do |platform|
+        demo_data[platform] = {}
+        
+        # Each keyword's data
+        keywords.each do |keyword|
+          # Base volume
+          base_volume = rand(5000..20000)
+          
+          # CPC
+          cpc = (rand * 2.5 + 0.5).round(2)
+          
+          # Monthly trends
+          monthly_trends = {}
+          
+          # Past months data
+          months.times do |i|
+            # Calculate date (going backward from today)
+            date = today << i
+            date = Date.new(date.year, date.month, 1)
+            
+            # Seasonal factor (peaks in January and July)
+            month_factor = 1 + 0.2 * ((date.month - 1) % 12 / 6.0 - 1).abs
+            
+            # Trend factor (slight increase over time)
+            trend_factor = 1 + 0.05 * (i.to_f / months)
+            
+            # Random variation (±10%)
+            random_factor = 0.9 + 0.2 * rand
+            
+            # Platform-specific variation
+            platform_factor = 1.0
+            case platform
+            when 'TikTok'
+              platform_factor = 1.0 + (0.1 * (months - i).to_f / months)  # Newer data has higher growth
+            when 'YouTube'
+              platform_factor = 1.0 + (0.08 * (months - i).to_f / months)
+            when 'X'
+              platform_factor = 1.0 + (0.03 * (months - i).to_f / months)
+            end
+            
+            # Final volume calculation
+            volume = (base_volume * month_factor / trend_factor * random_factor * platform_factor).to_i
+            
+            # Store result
+            monthly_trends[date.strftime('%Y-%m-%d')] = volume
+          end
+          
+          # Store keyword data
+          demo_data[platform][keyword] = {
+            'volume' => monthly_trends.values.sum / monthly_trends.size,  # Average
+            'cpc' => cpc,
+            'trends' => monthly_trends
+          }
+        end
+      end
+      
+      demo_data
+    end
+    
+    # Function to create dataframe from API data
+    def create_dataframe(data, platform, period_months=12)
+      return nil if !data || data.empty?
+      
+      # Calculate start date
+      today = Date.today
+      start_date = today << period_months
+      
+      # Create dataframe
+      df_list = []
+      
+      data.each do |keyword, kw_data|
+        trends = kw_data['trends'] || {}
+        
+        # Filter by period
+        filtered_trends = trends.select { |date_str, _| Date.parse(date_str) >= start_date }
+        
+        if filtered_trends.any?
+          filtered_trends.each do |date_str, volume|
+            date = Date.parse(date_str)
+            df_list << {
+              'date' => date,
+              'year_month' => date.strftime('%Y/%m'),
+              'keyword' => keyword,
+              'platform' => platform,
+              'volume' => volume
+            }
+          end
+        end
+      end
+      
+      return nil if df_list.empty?
+      
+      df_list
+    end
+    
+    # Function to prepare chart data
+    def prepare_chart_data(all_dfs, period_months=12)
+      return nil if !all_dfs || all_dfs.empty?
+      
+      # Combine all dataframes
+      combined_df = all_dfs.flatten
+      
+      # Get unique dates and sort
+      all_dates = combined_df.map { |row| row['date'] }.uniq.sort
+      
+      # Create labels
+      labels = all_dates.map { |date| date.strftime('%Y/%m') }
+      
+      # Create datasets
+      datasets = []
+      
+      # Group by platform and keyword
+      grouped_data = {}
+      combined_df.each do |row|
+        platform = row['platform']
+        keyword = row['keyword']
+        date = row['date']
+        volume = row['volume']
+        
+        grouped_data[platform] ||= {}
+        grouped_data[platform][keyword] ||= {}
+        grouped_data[platform][keyword][date] = volume
+      end
+      
+      # Create datasets
+      grouped_data.each do |platform, platform_data|
+        platform_data.each do |keyword, date_data|
+          data_points = []
+          
+          # For each date, find the corresponding value or use null
+          all_dates.each do |date|
+            data_points << (date_data[date] || nil)
+          end
+          
+          # Create dataset object
+          datasets << {
+            label: "#{keyword} (#{platform})",
+            data: data_points,
+            borderColor: PLATFORM_COLORS[platform] || 'gray',
+            backgroundColor: PLATFORM_COLORS[platform] || 'gray',
+            borderWidth: 2,
+            tension: 0.1,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          }
+        end
+      end
+      
+      { labels: labels, datasets: datasets }
+    end
+    
+    # Function to render chart
+    def render_chart(chart_data)
+      begin
+        # Get chart canvas
+        canvas = document.getElementById('myChart')
+        
+        # Create chart configuration
+        config = {
+          type: 'line',
+          data: chart_data,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: 'キーワード検索ボリューム推移',
+                font: {
+                  size: 18
+                }
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: JS.function { |context|
+                    label = context[:dataset][:label] || ''
+                    label += ': ' if label
+                    if context[:parsed][:y]
+                      label += JS.global.Intl.NumberFormat.new('ja-JP').format(context[:parsed][:y])
+                    end
+                    label
+                  }
+                }
+              },
+              legend: {
+                position: 'top',
+                labels: {
+                  boxWidth: 12
+                }
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                title: {
+                  display: true,
+                  text: '年月'
+                }
+              },
+              y: {
+                display: true,
+                title: {
+                  display: true,
+                  text: '検索ボリューム'
+                },
+                beginAtZero: true,
+                ticks: {
+                  callback: JS.function { |value|
+                    JS.global.Intl.NumberFormat.new('ja-JP').format(value)
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        # Destroy existing chart if it exists
+        if $chart_instance
+          $chart_instance.destroy
+        end
+        
+        # Create new chart
+        $chart_instance = JS.global.Chart.new(canvas, config)
+        
+        # Store last data for export
+        $last_data = chart_data
+        
+        return true
+      rescue => e
+        console.error("Error rendering chart: #{e.message}")
+        return false
+      end
+    end
+    
+    # Function to export data to CSV
+    def export_to_csv
+      if !$last_data
+        show_status("エクスポートするデータがありません。まず検索を実行してください。", "error")
+        return
+      end
+      
+      begin
+        labels = $last_data[:labels]
+        datasets = $last_data[:datasets]
+        
+        # Create CSV content
+        csv_string = CSV.generate do |csv|
+          # Header row
+          header = ['キーワード', 'プラットフォーム'] + labels
+          csv << header
+          
+          # Data rows
+          datasets.each do |dataset|
+            # Extract keyword and platform from label
+            label_parts = dataset[:label].match(/(.+) \((.+)\)/)
+            keyword = label_parts ? label_parts[1] : dataset[:label]
+            platform = label_parts ? label_parts[2] : ''
+            
+            # Add data row
+            row = [keyword, platform] + dataset[:data].map { |val| val || '' }
+            csv << row
+          end
+        end
+        
+        # Create download link
+        blob = JS.global.Blob.new([csv_string], { type: 'text/csv;charset=utf-8;' })
+        url = JS.global.URL.createObjectURL(blob)
+        
+        link = document.createElement('a')
+        link[:href] = url
+        link[:download] = "keyword_volume_data_#{Date.today.strftime('%Y%m%d')}.csv"
+        link[:style][:visibility] = 'hidden'
+        
+        document.body.appendChild(link)
+        link.click
+        document.body.removeChild(link)
+        
+        show_status("CSVファイルをダウンロードしました", "success")
+      rescue => e
+        console.error("Error exporting to CSV: #{e.message}")
+        show_status("CSVエクスポート中にエラーが発生しました: #{e.message}", "error")
+      end
+    end
+    
+    # Function to handle search button click
+    def on_search_click
+      begin
+        # Show loading status
+        show_status("データを取得中...", "loading")
+        
+        # Get input values
+        keywords_input = document.getElementById('keywords')[:value]
+        keywords = keywords_input.split(',').map(&:strip).reject(&:empty?)
+        
+        if keywords.empty?
+          show_status("キーワードを入力してください", "error")
+          return
+        end
+        
+        # Get selected platforms
+        platforms = []
+        platforms << 'Google' if document.getElementById('google')[:checked]
+        platforms << 'YouTube' if document.getElementById('youtube')[:checked]
+        platforms << 'X' if document.getElementById('twitter')[:checked]
+        platforms << 'TikTok' if document.getElementById('tiktok')[:checked]
+        
+        if platforms.empty?
+          show_status("少なくとも1つのプラットフォームを選択してください", "error")
+          return
+        end
+        
+        # Get period
+        period_select = document.getElementById('period')
+        period_months = period_select[:value].to_i
+        
+        # Get API key
+        api_key = document.getElementById('apiKey')[:value].strip
+        
+        # Set demo notice
+        demo_notice = document.getElementById('demoNotice')
+        
+        # Collect data from all platforms
+        all_dfs = []
+        use_demo = false
+        
+        if api_key.empty?
+          demo_notice[:textContent] = "APIキーが提供されていないため、デモデータを使用しています"
+          use_demo = true
+        else
+          demo_notice[:textContent] = ""
+          
+          # Try to fetch data from API
+          platforms.each do |platform|
+            # Fetch data from API
+            api_response = fetch_data(keywords, platform, api_key)
+            
+            if api_response
+              # Process API response
+              processed_data = process_api_data(api_response, keywords)
+              
+              if processed_data && !processed_data.empty?
+                # Create dataframe
+                df = create_dataframe(processed_data, platform, period_months)
+                
+                if df
+                  all_dfs << df
+                else
+                  console.log("#{platform}: No data found for the specified period")
+                end
+              else
+                console.log("#{platform}: Could not process API response")
+              end
+            else
+              console.log("#{platform}: API request failed")
+            end
+          end
+          
+          # If no data was fetched, use demo data
+          if all_dfs.empty?
+            show_status("APIからデータを取得できませんでした。デモデータを使用します。", "loading")
+            demo_notice[:textContent] = "APIからデータを取得できなかったため、デモデータを使用しています"
+            use_demo = true
+          end
+        end
+        
+        # If using demo data
+        if use_demo
+          # Generate demo data
+          demo_data = generate_demo_data(keywords, platforms, period_months)
+          
+          # Create dataframes from demo data
+          platforms.each do |platform|
+            df = create_dataframe(demo_data[platform], platform, period_months)
+            all_dfs << df if df
+          end
+        end
+        
+        # Check if we have any data
+        if all_dfs.empty?
+          show_status("データが取得できませんでした", "error")
+          return
+        end
+        
+        # Prepare chart data
+        chart_data = prepare_chart_data(all_dfs, period_months)
+        
+        if !chart_data
+          show_status("グラフデータの準備に失敗しました", "error")
+          return
+        end
+        
+        # Render chart
+        if render_chart(chart_data)
+          # Enable export button
+          export_button = document.getElementById('exportButton')
+          export_button[:disabled] = false
+          
+          # Show success message
+          if use_demo
+            show_status("デモデータでグラフを描画しました", "success")
+          else
+            show_status("APIデータでグラフを描画しました", "success")
+          end
+        else
+          show_status("グラフの描画に失敗しました", "error")
+        end
+      rescue => e
+        console.error("Error in search click handler: #{e.message}")
+        show_status("エラーが発生しました: #{e.message}", "error")
+      end
+    end
+    
+    begin
+      # Attach event listeners
+      search_button = document.getElementById('searchButton')
+      export_button = document.getElementById('exportButton')
+      
+      if search_button
+        search_button.addEventListener('click') do |event|
+          on_search_click
+        end
+      else
+        console.error("Search button not found")
+      end
+      
+      if export_button
+        export_button.addEventListener('click') do |event|
+          export_to_csv
+        end
+      else
+        console.error("Export button not found")
+      end
+      
+      # Initial chart render with default values
+      console.log("Initializing with default values (Ruby.wasm)")
+      on_search_click
+    rescue => e
+      console.error("Error setting up event listeners: #{e.message}")
+    end
+  </script>
+</body>
+</html>
