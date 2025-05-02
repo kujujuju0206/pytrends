@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ruby.wasm + Chart.js Example</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ruby/3.4-wasm-wasi@2.7.1/dist/browser.script.iife.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .chart-container {
+      width: 100%;
+      height: 400px;
+      margin-top: 20px;
+    }
+    #controls {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <h1>Keyword Volume Trends with Ruby.wasm</h1>
+  
+  <div id="controls">
+    <label for="keywords">Keywords (comma separated):</label>
+    <input type="text" id="keywords" value="ファッション,旅行,スポーツ" style="width: 300px;">
+    
+    <div style="margin-top: 10px;">
+      <label>Platforms:</label>
+      <input type="checkbox" id="google" checked> <label for="google">Google</label>
+      <input type="checkbox" id="youtube"> <label for="youtube">YouTube</label>
+      <input type="checkbox" id="twitter"> <label for="twitter">X</label>
+      <input type="checkbox" id="tiktok"> <label for="tiktok">TikTok</label>
+    </div>
+    
+    <div style="margin-top: 10px;">
+      <label for="period">Period:</label>
+      <select id="period">
+        <option value="12">Past 12 months</option>
+        <option value="6">Past 6 months</option>
+        <option value="3">Past 3 months</option>
+      </select>
+    </div>
+    
+    <button id="searchButton" style="margin-top: 10px;">Search</button>
+  </div>
+  
+  <div class="chart-container">
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script type="text/ruby">
+    require 'js'
+    require 'json'
+    require 'date'
+
+    # Access DOM elements
+    document = JS.global[:document]
+    console = JS.global[:console]
+    
+    # Function to generate demo data (similar to your Python version)
+    def generate_demo_data(keywords, platforms, months=12)
+      today = Date.today
+      demo_data = {}
+      
+      # Each platform's data
+      platforms.each do |platform|
+        demo_data[platform] = {}
+        
+        # Each keyword's data
+        keywords.each do |keyword|
+          # Base volume
+          base_volume = rand(5000..20000)
+          
+          # CPC
+          cpc = (rand * 2.5 + 0.5).round(2)
+          
+          # Monthly trends
+          monthly_trends = {}
+          
+          # Past months data
+          months.times do |i|
+            # Calculate date (going backward from today)
+            date = today << i
+            date = Date.new(date.year, date.month, 1)
+            
+            # Seasonal factor (peaks in January and July)
+            month_factor = 1 + 0.2 * ((date.month - 1) % 12 / 6.0 - 1).abs
+            
+            # Trend factor (slight increase over time)
+            trend_factor = 1 + 0.05 * (i.to_f / months)
+            
+            # Random variation (±10%)
+            random_factor = 0.9 + 0.2 * rand
+            
+            # Platform-specific variation
+            platform_factor = 1.0
+            case platform
+            when 'TikTok'
+              platform_factor = 1.0 + (0.1 * (months - i).to_f / months)  # Newer data has higher growth
+            when 'YouTube'
+              platform_factor = 1.0 + (0.08 * (months - i).to_f / months)
+            when 'X'
+              platform_factor = 1.0 + (0.03 * (months - i).to_f / months)
+            end
+            
+            # Final volume calculation
+            volume = (base_volume * month_factor / trend_factor * random_factor * platform_factor).to_i
+            
+            # Store result
+            monthly_trends[date.strftime('%Y-%m-%d')] = volume
+          end
+          
+          # Store keyword data
+          demo_data[platform][keyword] = {
+            'volume' => monthly_trends.values.sum / monthly_trends.size,  # Average
+            'cpc' => cpc,
+            'trends' => monthly_trends
+          }
+        end
+      end
+      
+      demo_data
+    end
+    
+    # Process data for Chart.js
+    def prepare_chart_data(demo_data, period_months=12)
+      # Calculate start date
+      today = Date.today
+      start_date = today << period_months
+      
+      # Prepare datasets for Chart.js
+      datasets = []
+      labels = []
+      
+      # Platform colors
+      platform_colors = {
+        'Google' => 'blue',
+        'YouTube' => 'red',
+        'X' => 'black',
+        'TikTok' => 'purple'
+      }
+      
+      # First, collect all dates to ensure consistent labels
+      all_dates = []
+      demo_data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          keyword_data['trends'].each do |date_str, _|
+            date = Date.parse(date_str)
+            all_dates << date if date >= start_date
+          end
+        end
+      end
+      
+      # Sort dates and create labels
+      all_dates.uniq!.sort!
+      labels = all_dates.map { |date| date.strftime('%Y/%m') }
+      
+      # Create datasets
+      demo_data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          data_points = []
+          
+          # For each label (date), find the corresponding value or use null
+          all_dates.each do |date|
+            date_str = date.strftime('%Y-%m-%d')
+            data_points << (keyword_data['trends'][date_str] || nil)
+          end
+          
+          # Create dataset object
+          datasets << {
+            label: "#{keyword} (#{platform})",
+            data: data_points,
+            borderColor: platform_colors[platform] || 'gray',
+            backgroundColor: platform_colors[platform] || 'gray',
+            tension: 0.1
+          }
+        end
+      end
+      
+      { labels: labels, datasets: datasets }
+    end
+    
+    # Function to render the chart
+    def render_chart(chart_data)
+      # Get the chart canvas
+      canvas = document.getElementById('myChart')
+      
+      # Create chart configuration
+      config = {
+        type: 'line',
+        data: chart_data,
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Keyword Search Volume Trends'
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            }
+          },
+          scales: {
+            x: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Month'
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Search Volume'
+              },
+              beginAtZero: true
+            }
+          }
+        }
+      }
+      
+      # Create the chart
+      JS.global[:Chart].new(canvas, config)
+    end
+    
+    # Function to handle search button click
+    def on_search_click
+      # Get input values
+      keywords_input = document.getElementById('keywords')[:value]
+      keywords = keywords_input.split(',').map(&:strip).reject(&:empty?)
+      
+      # Get selected platforms
+      platforms = []
+      platforms << 'Google' if document.getElementById('google')[:checked]
+      platforms << 'YouTube' if document.getElementById('youtube')[:checked]
+      platforms << 'X' if document.getElementById('twitter')[:checked]
+      platforms << 'TikTok' if document.getElementById('tiktok')[:checked]
+      
+      # Get period
+      period_select = document.getElementById('period')
+      period_months = period_select[:value].to_i
+      
+      # Generate demo data
+      console.log("Generating demo data for keywords: #{keywords.join(', ')}")
+      demo_data = generate_demo_data(keywords, platforms, period_months)
+      
+      # Prepare chart data
+      chart_data = prepare_chart_data(demo_data, period_months)
+      
+      # Render chart
+      render_chart(chart_data)
+      
+      console.log("Chart rendered successfully")
+    end
+    
+    # Attach event listener to search button
+    search_button = document.getElementById('searchButton')
+    search_button.addEventListener('click') do |event|
+      on_search_click
+    end
+    
+    # Initial chart render with default values
+    console.log("Initializing with default values")
+    on_search_click
+  </script>
+</body>
+</html>
