@@ -115,7 +115,7 @@
   <div id="controls">
     <div class="form-group">
       <label for="keywords">Keywords (comma separated):</label>
-      <input type="text" id="keywords" value="ファッション,旅行,スポーツ">
+      <input type="text" id="keywords" value="つばきファクトリー">
     </div>
     
     <div class="form-group">
@@ -151,7 +151,7 @@
     
     <div class="form-group">
       <label for="apiKey">API Key (optional):</label>
-      <input type="text" id="apiKey" placeholder="Enter your Keyword Tool API key">
+      <input type="text" id="apiKey" value="ebf17c9dfc6a862ee5944ffc434fc959e6a38f35" placeholder="Enter your Keyword Tool API key">
     </div>
     
     <div class="button-group">
@@ -256,7 +256,8 @@
       body["keyword"] = keywords
       
       begin
-        console.log("Requesting data from #{platform} API...")
+        console.log("Requesting data from #{platform} API for keywords: #{keywords.join(', ')}...")
+        console.log("API URL: #{url}")
         
         # Create fetch options
         options = {
@@ -267,12 +268,17 @@
           body: JSON.generate(body)
         }
         
+        console.log("Request body: #{JSON.generate(body)}")
+        
         # Make the API request
         response = JS.global.fetch(url, options).await
+        
+        console.log("Response status: #{response[:status]}")
         
         if response[:ok]
           data = response.json.await
           console.log("#{platform} data fetched successfully")
+          console.log("Response data: #{JSON.generate(data)}")
           return data
         else
           error_text = response.text.await
@@ -292,15 +298,19 @@
       # Validate API response
       if !api_response || !api_response.key?('results')
         console.log("Invalid API response")
+        console.log("API response keys: #{api_response ? api_response.keys.join(', ') : 'nil'}")
         return processed_data
       end
       
       results = api_response['results']
+      console.log("Results keys: #{results.keys.join(', ')}")
       
       # Process each keyword
       keywords.each do |keyword|
+        console.log("Processing keyword: #{keyword}")
         if results.key?(keyword)
           kw_data = results[keyword]
+          console.log("Keyword data keys: #{kw_data.keys.join(', ')}")
           monthly_trends = {}
           
           # Extract monthly data
@@ -314,16 +324,21 @@
               month = kw_data[month_num_key]
               volume = kw_data[month_key]
               
+              console.log("Month #{i+1}: year=#{year}, month=#{month}, volume=#{volume}")
+              
               if year && month && volume
                 # Create date key
                 date_key = Date.new(year, month, 1).strftime('%Y-%m-%d')
                 monthly_trends[date_key] = volume
               end
+            else
+              console.log("Missing data for month #{i+1}")
             end
           end
           
           # Sort by date
           monthly_trends = monthly_trends.sort.to_h
+          console.log("Monthly trends: #{monthly_trends.inspect}")
           
           # Store processed data
           processed_data[keyword] = {
@@ -331,9 +346,12 @@
             'cpc' => kw_data['cpc'],
             'trends' => monthly_trends
           }
+        else
+          console.log("Keyword '#{keyword}' not found in results")
         end
       end
       
+      console.log("Processed data: #{processed_data.inspect}")
       processed_data
     end
     

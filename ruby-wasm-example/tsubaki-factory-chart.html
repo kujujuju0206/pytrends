@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>つばきファクトリー 検索ボリューム</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .chart-container {
+      width: 100%;
+      height: 500px;
+      margin-top: 30px;
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .info {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+    }
+    .info h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+    .info p {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>つばきファクトリー 検索ボリューム</h1>
+  
+  <div class="chart-container">
+    <canvas id="myChart"></canvas>
+  </div>
+  
+  <div class="info">
+    <h2>キーワード情報</h2>
+    <p><strong>キーワード:</strong> つばきファクトリー</p>
+    <p><strong>平均検索ボリューム:</strong> 90,500</p>
+    <p><strong>CPC:</strong> 50.35円</p>
+    <p><strong>データソース:</strong> Google検索</p>
+  </div>
+
+  <script>
+    // Chart.jsのデータを読み込む
+    const chartData = {
+      "labels": [
+        "2024/06",
+        "2024/07",
+        "2024/08",
+        "2024/09",
+        "2024/10",
+        "2024/11",
+        "2024/12",
+        "2025/01",
+        "2025/02",
+        "2025/03"
+      ],
+      "datasets": [
+        {
+          "label": "つばきファクトリー (Google)",
+          "data": [
+            201000,
+            90500,
+            90500,
+            60500,
+            60500,
+            74000,
+            74000,
+            90500,
+            60500,
+            90500
+          ],
+          "borderColor": "rgba(66, 133, 244, 1)",
+          "backgroundColor": "rgba(66, 133, 244, 1)",
+          "borderWidth": 2,
+          "tension": 0.1,
+          "pointRadius": 3,
+          "pointHoverRadius": 5
+        }
+      ]
+    };
+
+    // グラフを描画
+    const ctx = document.getElementById('myChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'つばきファクトリー 検索ボリューム推移',
+            font: {
+              size: 18
+            }
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += new Intl.NumberFormat('ja-JP').format(context.parsed.y);
+                }
+                return label;
+              }
+            }
+          },
+          legend: {
+            position: 'top',
+            labels: {
+              boxWidth: 12
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            title: {
+              display: true,
+              text: '年月'
+            }
+          },
+          y: {
+            display: true,
+            title: {
+              display: true,
+              text: '検索ボリューム'
+            },
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return new Intl.NumberFormat('ja-JP').format(value);
+              }
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
