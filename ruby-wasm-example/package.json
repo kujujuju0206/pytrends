@@ -1,0 +1,16 @@
+{
+  "name": "ruby-wasm-example",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@ruby/3.4-wasm-wasi": "^2.7.1",
+    "chart.js": "^4.4.9"
+  }
+}

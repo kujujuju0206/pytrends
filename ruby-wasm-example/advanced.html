@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Keyword Volume Analyzer - Ruby.wasm + Chart.js</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ruby/3.4-wasm-wasi@2.7.1/dist/browser.script.iife.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .chart-container {
+      width: 100%;
+      height: 500px;
+      margin-top: 30px;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    #controls {
+      margin-top: 20px;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: inline-block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"], select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-top: 5px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #exportButton {
+      background-color: #2196F3;
+      margin-left: 10px;
+    }
+    #exportButton:hover {
+      background-color: #0b7dda;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
+    .loading {
+      background-color: #d9edf7;
+      color: #31708f;
+    }
+    .button-group {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    #demoNotice {
+      text-align: center;
+      margin-top: 10px;
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <h1>Keyword Volume Analyzer</h1>
+  
+  <div id="controls">
+    <div class="form-group">
+      <label for="keywords">Keywords (comma separated):</label>
+      <input type="text" id="keywords" value="ファッション,旅行,スポーツ">
+    </div>
+    
+    <div class="form-group">
+      <label>Platforms:</label>
+      <div class="checkbox-group">
+        <div class="checkbox-item">
+          <input type="checkbox" id="google" checked>
+          <label for="google">Google</label>
+        </div>
+        <div class="checkbox-item">
+          <input type="checkbox" id="youtube">
+          <label for="youtube">YouTube</label>
+        </div>
+        <div class="checkbox-item">
+          <input type="checkbox" id="twitter">
+          <label for="twitter">X (Twitter)</label>
+        </div>
+        <div class="checkbox-item">
+          <input type="checkbox" id="tiktok">
+          <label for="tiktok">TikTok</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="period">Period:</label>
+      <select id="period">
+        <option value="12">Past 12 months</option>
+        <option value="6">Past 6 months</option>
+        <option value="3">Past 3 months</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="apiKey">API Key (optional):</label>
+      <input type="text" id="apiKey" placeholder="Enter your Keyword Tool API key">
+    </div>
+    
+    <div class="button-group">
+      <button id="searchButton">Search</button>
+      <button id="exportButton" disabled>Export to CSV</button>
+    </div>
+    
+    <div id="status"></div>
+    <div id="demoNotice"></div>
+  </div>
+  
+  <div class="chart-container">
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script type="text/ruby">
+    require 'js'
+    require 'json'
+    require 'date'
+    require 'csv'
+    require 'stringio'
+
+    # Access DOM elements
+    document = JS.global[:document]
+    console = JS.global[:console]
+    
+    # Global variables
+    $chart_instance = nil
+    $last_data = nil
+    
+    # API configuration
+    API_CONFIG = {
+      'Google' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/google',
+        'base_body' => {
+          "metrics_location" => [2392],  # Japan
+          "metrics_language" => ["ja"],
+          "metrics_network" => "googlesearchnetwork",
+          "metrics_currency" => "JPY",
+          "output" => "json"
+        }
+      },
+      'YouTube' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/youtube',
+        'base_body' => {
+          "country" => "JP",
+          "metrics_currency" => "JPY",
+          "complete" => false,
+          "output" => "json"
+        }
+      },
+      'X' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/twitter',
+        'base_body' => {
+          "country" => "JP",
+          "metrics_currency" => "JPY",
+          "complete" => false,
+          "output" => "json"
+        }
+      },
+      'TikTok' => {
+        'url' => 'https://api.keywordtool.io/v2/search/volume/tiktok',
+        'base_body' => {
+          "country" => "JP",
+          "metrics_currency" => "JPY",
+          "complete" => false,
+          "output" => "json"
+        }
+      }
+    }
+    
+    # Platform colors
+    PLATFORM_COLORS = {
+      'Google' => 'rgba(66, 133, 244, 1)',
+      'YouTube' => 'rgba(255, 0, 0, 1)',
+      'X' => 'rgba(29, 161, 242, 1)',
+      'TikTok' => 'rgba(238, 29, 82, 1)'
+    }
+    
+    # Function to show status message
+    def show_status(message, type)
+      status_div = document.getElementById('status')
+      status_div[:textContent] = message
+      status_div[:className] = type
+      status_div[:style][:display] = 'block'
+    end
+    
+    # Function to hide status message
+    def hide_status
+      status_div = document.getElementById('status')
+      status_div[:style][:display] = 'none'
+    end
+    
+    # Function to fetch data from API
+    def fetch_data(keywords, platform, api_key)
+      return nil if !API_CONFIG.key?(platform)
+      
+      config = API_CONFIG[platform]
+      url = config['url']
+      body = config['base_body'].dup
+      body["apikey"] = api_key
+      body["keyword"] = keywords
+      
+      begin
+        console.log("Requesting data from #{platform} API...")
+        
+        # Create fetch options
+        options = {
+          method: 'POST',
+          headers: {
+            'Content-Type' => 'application/json'
+          },
+          body: JSON.generate(body)
+        }
+        
+        # Make the API request
+        response = JS.global.fetch(url, options).await
+        
+        if response[:ok]
+          data = response.json.await
+          console.log("#{platform} data fetched successfully")
+          return data
+        else
+          error_text = response.text.await
+          console.error("#{platform} API error: #{response[:status]} - #{error_text}")
+          return nil
+        end
+      rescue => e
+        console.error("Error fetching #{platform} data: #{e.message}")
+        return nil
+      end
+    end
+    
+    # Function to process API response
+    def process_api_data(api_response, keywords)
+      processed_data = {}
+      
+      # Validate API response
+      if !api_response || !api_response.key?('results')
+        console.log("Invalid API response")
+        return processed_data
+      end
+      
+      results = api_response['results']
+      
+      # Process each keyword
+      keywords.each do |keyword|
+        if results.key?(keyword)
+          kw_data = results[keyword]
+          monthly_trends = {}
+          
+          # Extract monthly data
+          12.times do |i|
+            month_key = "m#{i+1}"
+            year_key = "m#{i+1}_year"
+            month_num_key = "m#{i+1}_month"
+            
+            if kw_data.key?(month_key) && kw_data.key?(year_key) && kw_data.key?(month_num_key)
+              year = kw_data[year_key]
+              month = kw_data[month_num_key]
+              volume = kw_data[month_key]
+              
+              if year && month && volume
+                # Create date key
+                date_key = Date.new(year, month, 1).strftime('%Y-%m-%d')
+                monthly_trends[date_key] = volume
+              end
+            end
+          end
+          
+          # Sort by date
+          monthly_trends = monthly_trends.sort.to_h
+          
+          # Store processed data
+          processed_data[keyword] = {
+            'volume' => kw_data['volume'],
+            'cpc' => kw_data['cpc'],
+            'trends' => monthly_trends
+          }
+        end
+      end
+      
+      processed_data
+    end
+    
+    # Function to generate demo data
+    def generate_demo_data(keywords, platforms, months=12)
+      today = Date.today
+      demo_data = {}
+      
+      # Each platform's data
+      platforms.each do |platform|
+        demo_data[platform] = {}
+        
+        # Each keyword's data
+        keywords.each do |keyword|
+          # Base volume
+          base_volume = rand(5000..20000)
+          
+          # CPC
+          cpc = (rand * 2.5 + 0.5).round(2)
+          
+          # Monthly trends
+          monthly_trends = {}
+          
+          # Past months data
+          months.times do |i|
+            # Calculate date (going backward from today)
+            date = today << i
+            date = Date.new(date.year, date.month, 1)
+            
+            # Seasonal factor (peaks in January and July)
+            month_factor = 1 + 0.2 * ((date.month - 1) % 12 / 6.0 - 1).abs
+            
+            # Trend factor (slight increase over time)
+            trend_factor = 1 + 0.05 * (i.to_f / months)
+            
+            # Random variation (±10%)
+            random_factor = 0.9 + 0.2 * rand
+            
+            # Platform-specific variation
+            platform_factor = 1.0
+            case platform
+            when 'TikTok'
+              platform_factor = 1.0 + (0.1 * (months - i).to_f / months)  # Newer data has higher growth
+            when 'YouTube'
+              platform_factor = 1.0 + (0.08 * (months - i).to_f / months)
+            when 'X'
+              platform_factor = 1.0 + (0.03 * (months - i).to_f / months)
+            end
+            
+            # Final volume calculation
+            volume = (base_volume * month_factor / trend_factor * random_factor * platform_factor).to_i
+            
+            # Store result
+            monthly_trends[date.strftime('%Y-%m-%d')] = volume
+          end
+          
+          # Store keyword data
+          demo_data[platform][keyword] = {
+            'volume' => monthly_trends.values.sum / monthly_trends.size,  # Average
+            'cpc' => cpc,
+            'trends' => monthly_trends
+          }
+        end
+      end
+      
+      demo_data
+    end
+    
+    # Function to prepare data for Chart.js
+    def prepare_chart_data(data, period_months=12)
+      # Calculate start date
+      today = Date.today
+      start_date = today << period_months
+      
+      # Prepare datasets for Chart.js
+      datasets = []
+      labels = []
+      
+      # First, collect all dates to ensure consistent labels
+      all_dates = []
+      data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          keyword_data['trends'].each do |date_str, _|
+            date = Date.parse(date_str)
+            all_dates << date if date >= start_date
+          end
+        end
+      end
+      
+      # Sort dates and create labels
+      all_dates.uniq!.sort!
+      labels = all_dates.map { |date| date.strftime('%Y/%m') }
+      
+      # Create datasets
+      data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          data_points = []
+          
+          # For each label (date), find the corresponding value or use null
+          all_dates.each do |date|
+            date_str = date.strftime('%Y-%m-%d')
+            data_points << (keyword_data['trends'][date_str] || nil)
+          end
+          
+          # Create dataset object
+          datasets << {
+            label: "#{keyword} (#{platform})",
+            data: data_points,
+            borderColor: PLATFORM_COLORS[platform] || 'gray',
+            backgroundColor: PLATFORM_COLORS[platform] || 'gray',
+            borderWidth: 2,
+            tension: 0.1,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          }
+        end
+      end
+      
+      { labels: labels, datasets: datasets }
+    end
+    
+    # Function to render the chart
+    def render_chart(chart_data)
+      # Get the chart canvas
+      canvas = document.getElementById('myChart')
+      
+      # Destroy previous chart if it exists
+      if $chart_instance
+        $chart_instance.destroy
+      end
+      
+      # Create chart configuration
+      config = {
+        type: 'line',
+        data: chart_data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Keyword Search Volume Trends',
+              font: {
+                size: 18
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            },
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12
+              }
+            }
+          },
+          scales: {
+            x: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Month'
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Search Volume'
+              },
+              beginAtZero: true
+            }
+          }
+        }
+      }
+      
+      # Create the chart
+      $chart_instance = JS.global[:Chart].new(canvas, config)
+    end
+    
+    # Function to export data to CSV
+    def export_to_csv(data)
+      return nil if !data
+      
+      csv_string = StringIO.new
+      csv = CSV.new(csv_string)
+      
+      # Write header row
+      header = ['Keyword', 'Platform', 'Average Volume', 'Min Volume', 'Max Volume']
+      csv << header
+      
+      # Write summary data
+      data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          volumes = keyword_data['trends'].values
+          row = [
+            keyword,
+            platform,
+            volumes.sum / volumes.size,
+            volumes.min,
+            volumes.max
+          ]
+          csv << row
+        end
+      end
+      
+      # Add a blank row
+      csv << []
+      
+      # Add monthly data headers
+      monthly_header = ['Keyword', 'Platform']
+      
+      # Get all unique dates
+      all_dates = []
+      data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          keyword_data['trends'].each do |date_str, _|
+            all_dates << Date.parse(date_str)
+          end
+        end
+      end
+      
+      # Sort dates
+      all_dates.uniq!.sort!
+      
+      # Add dates to header
+      all_dates.each do |date|
+        monthly_header << date.strftime('%Y/%m')
+      end
+      
+      csv << monthly_header
+      
+      # Write monthly data
+      data.each do |platform, platform_data|
+        platform_data.each do |keyword, keyword_data|
+          row = [keyword, platform]
+          
+          all_dates.each do |date|
+            date_str = date.strftime('%Y-%m-%d')
+            row << (keyword_data['trends'][date_str] || '')
+          end
+          
+          csv << row
+        end
+      end
+      
+      csv_string.string
+    end
+    
+    # Function to handle search button click
+    def on_search_click
+      # Get input values
+      keywords_input = document.getElementById('keywords')[:value]
+      keywords = keywords_input.split(',').map(&:strip).reject(&:empty?)
+      
+      if keywords.empty?
+        show_status('Please enter at least one keyword', 'error')
+        return
+      end
+      
+      # Get selected platforms
+      platforms = []
+      platforms << 'Google' if document.getElementById('google')[:checked]
+      platforms << 'YouTube' if document.getElementById('youtube')[:checked]
+      platforms << 'X' if document.getElementById('twitter')[:checked]
+      platforms << 'TikTok' if document.getElementById('tiktok')[:checked]
+      
+      if platforms.empty?
+        show_status('Please select at least one platform', 'error')
+        return
+      end
+      
+      # Get period
+      period_select = document.getElementById('period')
+      period_months = period_select[:value].to_i
+      
+      # Get API key
+      api_key = document.getElementById('apiKey')[:value].strip
+      
+      # Show loading status
+      show_status('Fetching data...', 'loading')
+      
+      # Variable to store all data
+      all_data = {}
+      
+      # Check if we should use real API or demo data
+      if api_key.empty?
+        # Use demo data
+        console.log("Using demo data for keywords: #{keywords.join(', ')}")
+        all_data = generate_demo_data(keywords, platforms, period_months)
+        document.getElementById('demoNotice')[:textContent] = 'Using demo data. Enter an API key for real data.'
+        
+        # Prepare and render chart
+        chart_data = prepare_chart_data(all_data, period_months)
+        render_chart(chart_data)
+        
+        # Enable export button
+        document.getElementById('exportButton')[:disabled] = false
+        
+        # Store data for export
+        $last_data = all_data
+        
+        # Hide loading status
+        hide_status
+      else
+        # Use real API
+        document.getElementById('demoNotice')[:textContent] = ''
+        
+        # Process each platform
+        platforms_processed = 0
+        
+        platforms.each do |platform|
+          # Fetch data from API
+          api_response = fetch_data(keywords, platform, api_key)
+          
+          if api_response
+            # Process API response
+            processed_data = process_api_data(api_response, keywords)
+            
+            if !processed_data.empty?
+              all_data[platform] = processed_data
+            else
+              console.log("No data found for #{platform}")
+            end
+          end
+          
+          # Increment counter
+          platforms_processed += 1
+          
+          # Check if all platforms have been processed
+          if platforms_processed == platforms.length
+            if all_data.empty?
+              show_status('No data found for the selected keywords and platforms', 'error')
+            else
+              # Prepare and render chart
+              chart_data = prepare_chart_data(all_data, period_months)
+              render_chart(chart_data)
+              
+              # Enable export button
+              document.getElementById('exportButton')[:disabled] = false
+              
+              # Store data for export
+              $last_data = all_data
+              
+              # Hide loading status
+              hide_status
+            end
+          end
+        end
+      end
+    end
+    
+    # Function to handle export button click
+    def on_export_click
+      if $last_data
+        # Generate CSV
+        csv_data = export_to_csv($last_data)
+        
+        if csv_data
+          # Create a Blob
+          blob = JS.global[:Blob].new([csv_data], { type: 'text/csv' })
+          
+          # Create a download link
+          url = JS.global[:URL].createObjectURL(blob)
+          
+          # Create an anchor element
+          a = document.createElement('a')
+          a[:href] = url
+          a[:download] = "keyword_volume_data_#{Date.today.strftime('%Y%m%d')}.csv"
+          
+          # Append to body, click, and remove
+          document.body.appendChild(a)
+          a.click
+          
+          # Clean up
+          JS.global[:setTimeout].call(-> {
+            document.body.removeChild(a)
+            JS.global[:URL].revokeObjectURL(url)
+          }, 100)
+          
+          show_status('Export completed successfully', 'success')
+          
+          # Hide status after 3 seconds
+          JS.global[:setTimeout].call(-> {
+            hide_status
+          }, 3000)
+        else
+          show_status('Failed to generate CSV data', 'error')
+        end
+      else
+        show_status('No data available to export', 'error')
+      end
+    end
+    
+    # Attach event listeners
+    search_button = document.getElementById('searchButton')
+    search_button.addEventListener('click') do |event|
+      on_search_click
+    end
+    
+    export_button = document.getElementById('exportButton')
+    export_button.addEventListener('click') do |event|
+      on_export_click
+    end
+    
+    # Initialize with default values
+    console.log("Initializing with default values")
+    on_search_click
+  </script>
+</body>
+</html>
